@@ -152,12 +152,14 @@ def refreshTSX(p="1mo",secs = None):
     mergeData = "DELETE FROM TSX where ROWID IN (SELECT F.ROWID FROM TSX F JOIN TMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
     insData = "INSERT INTO TSX SELECT Ticker, Date,Open ,High , Low , Close, AdjClose, Volume FROM TMP"
     tickers = [item for item in tickers if len(item)<12]
+    lenTickers= len(tickers)
     #tickers.sort()
     #test1 = 'TECK.B.TO' in tickers
     dontRefresh = conn_read(db,"SELECT Value FROM Meta where julianday()-julianday(Refreshed) <=1")
     #test2 = 'TECK.B.TO' in dontRefresh
     tickers = list(set(tickers) - set(dontRefresh))
     totTickers = len(tickers)
+    print(f'{totTickers} remaining to be refreshed out of {lenTickers} found on TSX website.')
     if totTickers == 0:
         print("No tickers to refresh")
 
