@@ -11,6 +11,7 @@ def DailyChecks():
     weeklyResults = []
 
     for tick, df2 in dfWeekly.groupby(level=0):
+        df2.sort_values(by='Date',axis=0,inplace=True)
         if len(df2) >52:
             df2.ta.macd(close='Adj_Close',append=True)
             df2['histDiff'] = df2['MACDh_12_26_9'].diff()
@@ -43,7 +44,7 @@ def DailyChecks():
     dailyResults = []
 
     for tick, df2 in dfDaily.groupby('Ticker'):
-        if len(df2) >52:
+        if len(df2) >140:
             df2.ta.macd(close='Adj_Close',append=True)
             df2['histDiff'] = df2['MACDh_12_26_9'].diff()
             df2.ta.ema(close='Adj_Close',length=13,append=True)
@@ -59,6 +60,6 @@ def DailyChecks():
     df = pd.DataFrame(dailyResults)
     writer = pd.ExcelWriter('out.xlsx')
     df.to_excel(writer, sheet_name='DailyScreen', index=False)
-    writer.save()
+    writer._save()
     
 DailyChecks()
