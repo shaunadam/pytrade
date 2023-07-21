@@ -108,10 +108,10 @@ def refreshTSX(p="1mo",secs = None):
     db = "HistoricalData/historicalData.db"
 
     #Setup commands on SQLITE DB
-    tbl1 = "CREATE TABLE IF NOT EXISTS TSX (Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int)"
+    tbl1 = "CREATE TABLE IF NOT EXISTS TSX (Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int, MACD float, EMA12 float, EMA26 float, EMA50 float, SMA12 float, SMA26 float, SMA50 float, RSI float)"
     tbl1a = "CREATE UNIQUE INDEX index_name ON TSX(Date, Ticker)"
     tbl2 = "drop table if exists TMP"
-    tbl2a = "CREATE TABLE TMP (Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int)"
+    tbl2a = "CREATE TABLE TMP              (Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int, MACD float, EMA12 float, EMA26 float, EMA50 float, SMA12 float, SMA26 float, SMA50 float, RSI float)"
     tbl3 = "CREATE TABLE IF NOT EXISTS Meta (Value char(20),Refreshed Date)"
     tbl3a = "CREATE UNIQUE INDEX idx_value ON Meta (Value)"
     setup = [tbl1,tbl1a,tbl2,tbl2a,tbl3,tbl3a]
@@ -150,7 +150,7 @@ def refreshTSX(p="1mo",secs = None):
 
     
     mergeData = "DELETE FROM TSX where ROWID IN (SELECT F.ROWID FROM TSX F JOIN TMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
-    insData = "INSERT INTO TSX SELECT Ticker, Date,Open ,High , Low , Close, AdjClose, Volume FROM TMP"
+    insData = "INSERT INTO TSX SELECT Ticker, Date,Open ,High , Low , Close, AdjClose, Volume ,MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI FROM TMP"
     tickers = [item for item in tickers if len(item)<12]
     lenTickers= len(tickers)
     #tickers.sort()
@@ -170,11 +170,13 @@ def refreshTSX(p="1mo",secs = None):
         ss = s.join(ticks)
         df = pdr.get_data_yahoo(ss,period =p ,progress=True,threads=True)
         df = df.rename(columns={"Adj Close": "AdjClose"})
+    
 
         if secs or totTickers == 1:
              df=df.reset_index().rename(columns={"level_0":"Ticker"})
         else:
             df=df.stack(level = 1).reset_index().rename(columns={"level_1":"Ticker"})
+
         conn_insert_df('TMP',df,db,'replace')
         conn_exec(db,mergeData)
         conn_exec(db,insData)
@@ -191,22 +193,25 @@ def getDF(date,period = 'D',ticker = None):
     from date specified forward.
     Can also specify period = 'W' for weekly resample.
     """
-    cols = ['Ticker', 'Date','Open' ,'High' , 'Low' , 'Close', 'AdjClose', 'Volume']
+    cols = ['Ticker', 'Date','Open' ,'High' , 'Low' , 'Close', 'AdjClose', 'Volume','MACD' ,'EMA12','EMA26','EMA50','SMA12','SMA26','SMA50','RSI']
     db = "HistoricalData/historicalData.db"
     if ticker:
         if type(ticker) == list and len(ticker) >1:
             ticker = "','".join(ticker)
             ticker = "'"+ticker+"'"
-            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume from TSX where Ticker in ("+ticker+") and Date >='"+date+"'"
+            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume, MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI from TSX where Ticker in ("+ticker+") and Date >='"+date+"'"
             
         elif type(ticker) == list and len(ticker) ==1:
-            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume from TSX where Ticker ='"+ticker[0]+"' and Date >='"+date+"'"
+            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume, MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI from TSX where Ticker ='"+ticker[0]+"' and Date >='"+date+"'"
         elif type(ticker) == str:
-            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume from TSX where Ticker ='"+ticker+"' and Date >='"+date+"'"
+            q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume, MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI from TSX where Ticker ='"+ticker+"' and Date >='"+date+"'"
     else:
-        q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume from TSX where Date >='"+date+"'"
+        q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume, MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI from TSX where Date >='"+date+"'"
     df = conn_read(db,q,False,False,cols)
     df =df.set_index([pd.DatetimeIndex(df['Date'])])
+    
+    
+    #need to get rid of this and just build a weekly table
     if period == 'W':
         df= df.groupby('Ticker').resample('W-MON',label='left',closed='left').agg({'Open':'first','High':'max','Low':'min','Close':'last','AdjClose':'last','Volume':'sum'})
     df = df.rename(columns={"AdjClose":"Adj_Close"})
