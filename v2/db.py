@@ -26,14 +26,20 @@ def initialize_database(db_path):
     
     # Create table for technical indicators
     cursor.execute('''CREATE TABLE IF NOT EXISTS technical_indicators (
+                      IndicatorID INTEGER,
                       Exchange TEXT,
                       Ticker TEXT,
                       Date TEXT,
-                      sma REAL,
-                      ema REAL,
-                      rsi REAL,
-                      macd REAL,
-                      PRIMARY KEY (Date, Ticker, Exchange))''')
+                      Value REAL,
+                      PRIMARY KEY (IndicatorID, Date, Ticker, Exchange),
+                      FOREIGN KEY (IndicatorID) REFERENCES indicator_metadata(IndicatorID))''')
+    
+    # Create table for indicator metadata
+    cursor.execute('''CREATE TABLE IF NOT EXISTS indicator_metadata (
+                      IndicatorID INTEGER PRIMARY KEY AUTOINCREMENT,
+                      IndicatorName TEXT,
+                      Parameters TEXT,
+                      Description TEXT)''')
     
     conn.commit()
     conn.close()
@@ -50,12 +56,12 @@ def upsert_stock_data_from_df(db_path, df):
 
 
 # Delete stock data for a specific ticker and date
-def delete_stock_data(db_path, ticker, date):
+def delete_stock_data(db_path, ticker, start_date, end_date):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Delete stock data
-    cursor.execute("DELETE FROM stock_data WHERE ticker=? AND date=?", (ticker, date))
+    # Delete stock data within the date range
+    cursor.execute("DELETE FROM stock_data WHERE ticker=? AND date BETWEEN ? AND ?", (ticker, start_date, end_date))
     
     conn.commit()
     conn.close()
