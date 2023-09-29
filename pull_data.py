@@ -132,7 +132,7 @@ def refreshTSX(p="1mo",secs = None):
             #requests_log.setLevel(logging.DEBUG)
             #requests_log.propagate = True
             print("Refreshing Tickers")
-            ti = requests.get(f"https://www.tsx.com/json/company-directory/search/tsx/%5E*",timeout=5)
+            ti = requests.get(f"https://www.tsx.com/json/company-directory/search/tsx/%5E*",timeout=5,verify=False)
             ti = ti.json()
             ti = ti['results']
             for key in ti:
@@ -143,7 +143,7 @@ def refreshTSX(p="1mo",secs = None):
     
 
         except Exception as err:# requests.exceptions.Timeout as err: 
-            print("Ticker Refresh Failed")
+            print("Ticker Refresh Failed")            
             
             tickers = conn_read(db,tickerSQL)
             print("Done Tickers Fall Back")
@@ -168,7 +168,13 @@ def refreshTSX(p="1mo",secs = None):
     for ticks in chunks(tickers,100):
         s = ' '
         ss = s.join(ticks)
-        df = pdr.get_data_yahoo(ss,period =p ,progress=True,threads=True)
+        session1 = requests.Session()
+        session1.verify = False
+        session1.trust_env = False
+        from urllib3.exceptions import InsecureRequestWarning
+        requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+
+        df = pdr.get_data_yahoo(ss,period =p ,progress=True,threads=True,session=session1)
         df = df.rename(columns={"Adj Close": "AdjClose"})
     
 
