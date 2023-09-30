@@ -1,11 +1,12 @@
 # Let's enhance the Data Fetching Module with error handling and logging functionalities.
 
 import logging
-import json
 import yfinance as yf
 from pandas_datareader import data as pdr
 import requests
 import pandas as pd
+import db
+
 
 # Initialize logging
 logging.basicConfig(filename='stock_data_fetch.log', level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,6 +39,7 @@ def scrape_ticker_list(ex):
 def fetch_historical_data(tickers, ex, start_date, end_date, limit=None):
     """Mock function to simulate fetching historical stock data for a specific ticker and date range."""
     try:
+        logging.info(f"Starting data pull for {len(tickers)} tickers")
         yf.pdr_override()
         df_all = []
         from urllib3.exceptions import InsecureRequestWarning
@@ -67,12 +69,13 @@ def fetch_historical_data(tickers, ex, start_date, end_date, limit=None):
         return None
 
 if __name__ == '__main__':
+    db_file = "pytrade/v2/historicalData.db"
     tickers = scrape_ticker_list('TSX')
+
     if tickers:
-        data = fetch_historical_data(tickers, ex='TSX', start_date='2020-01-01', end_date='2023-09-28', limit=None)
+        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-09-21', end_date='2023-09-28', limit=None)
         if data is not None:
-            # Assuming upsert_stock_data is imported from the Database Module
-            # upsert_stock_data(db_path, records)
+            db.upsert_stock_data_from_df(data)
             logging.info("Successfully fetched and stored stock data.")
         else:
             logging.error("Failed to fetch stock data.")
