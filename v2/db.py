@@ -1,7 +1,7 @@
 # Import PostgreSQL and Pandas libraries
 import psycopg2
 from psycopg2 import sql
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 # Initialize the PostgreSQL database and tables
 def initialize_database():
@@ -56,11 +56,9 @@ def initialize_database():
 engine = create_engine('postgresql://shaun:123456@localhost:5432/localdev')
 
 def upsert_stock_data_from_df(df):
-    df.to_sql('stock_data', engine, if_exists='append', index=False)
-
-
-# Delete stock data for a specific ticker and date
-def delete_stock_data(ticker, start_date, end_date):
+    # Step 1: Identify overlapping date ranges for each Ticker
+    overlap = df.groupby('Ticker')['Date'].agg(['min', 'max']).reset_index()
+    
     conn = psycopg2.connect(
         host="localhost",
         port="5432",
@@ -69,12 +67,18 @@ def delete_stock_data(ticker, start_date, end_date):
         password="123456"
     )
     cursor = conn.cursor()
-
-    # Delete stock data within the date range
-    cursor.execute(sql.SQL("DELETE FROM stock_data WHERE ticker=%s AND date BETWEEN %s AND %s"), (ticker, start_date, end_date))
-
+    
+    # Step 2: Issue DELETE queries for each Ticker and corresponding date range
+    for row in overlap.iterrows():
+        ticker, start_date, end_date = row[1]['Ticker'], row[1]['min'], row[1]['max']
+        cursor.execute(sql.SQL("DELETE FROM stock_data WHERE \"Ticker\"=%s AND \"Date\" BETWEEN %s AND %s"), (ticker, start_date, end_date))
+    
+    # Commit all DELETE queries in a single transaction
     conn.commit()
     conn.close()
+    
+    # Step 3: Insert the new data
+    df.to_sql('stock_data', engine, if_exists='append', index=False)
 
 # Function to insert technical indicators into the technical_indicators table
 def insert_technical_indicators(indicator_data):
