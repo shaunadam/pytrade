@@ -1,6 +1,7 @@
 *.db
 settings.json
 launch.json
+postgres_data/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

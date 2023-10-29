@@ -63,6 +63,10 @@ def fetch_historical_data(tickers, ex, start_date, end_date, limit=None):
             df['Exchange'] = ex
             df_all.append(df)
         df = pd.concat(df_all)
+        oldCols = df.columns
+        newCols = [l.lower() for l in oldCols]
+        newCols = dict(zip(oldCols,newCols))
+        df.rename(columns=newCols,inplace=True)
         return df
     except Exception as e:
         logging.error(f"Failed to fetch historical data: {e}")
@@ -71,11 +75,10 @@ def fetch_historical_data(tickers, ex, start_date, end_date, limit=None):
     
 
 if __name__ == '__main__':
-    db_file = "pytrade/v2/historicalData.db"
     tickers = scrape_ticker_list('TSX')
 
     if tickers:
-        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-09-01', end_date='2023-09-30', limit=None)
+        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-10-01', end_date='2023-10-28', limit=None)
         if data is not None:
             db.upsert_stock_data_from_df(data)
             logging.info("Successfully fetched and stored stock data.")

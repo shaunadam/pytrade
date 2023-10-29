@@ -7,10 +7,10 @@ from sqlalchemy import create_engine, text
 def initialize_database():
     conn = psycopg2.connect(
         host="localhost",
-        port="5432",
+        port="5433",
         dbname="localdev",
         user="shaun",
-        password="123456"
+        password="123546"
     )
     cursor = conn.cursor()
 
@@ -25,7 +25,7 @@ def initialize_database():
     cursor.execute(sql.SQL('''CREATE TABLE IF NOT EXISTS stock_data (
                       Date DATE,
                       Ticker VARCHAR(10),
-                      "Adj Close" FLOAT,
+                      "adj close" FLOAT,
                       Close FLOAT,
                       High FLOAT,
                       Low FLOAT,
@@ -41,8 +41,6 @@ def initialize_database():
                       Ticker VARCHAR(10),
                       Date DATE,
                       Value1 FLOAT,
-                      Value2 FLOAT,
-                      Value3 FLOAT,
                       PRIMARY KEY (Date, Ticker, IndicatorID),
                       FOREIGN KEY (IndicatorID) REFERENCES indicator_metadata(IndicatorID))'''))
 
@@ -53,41 +51,41 @@ def initialize_database():
     conn.close()
 
 # Insert or Update stock data into the stock_data table from a DataFrame
-engine = create_engine('postgresql://shaun:123456@localhost:5432/localdev')
+engine = create_engine('postgresql://shaun:123546@localhost:5433/localdev')
 
 def upsert_stock_data_from_df(df):
     # Step 1: Identify overlapping date ranges for each Ticker
-    overlap = df.groupby('Ticker')['Date'].agg(['min', 'max']).reset_index()
+    overlap = df.groupby('ticker')['date'].agg(['min', 'max']).reset_index()
     
     conn = psycopg2.connect(
         host="localhost",
-        port="5432",
+        port="5433",
         dbname="localdev",
         user="shaun",
-        password="123456"
+        password="123546"
     )
     cursor = conn.cursor()
     
     # Step 2: Issue DELETE queries for each Ticker and corresponding date range
     for row in overlap.iterrows():
-        ticker, start_date, end_date = row[1]['Ticker'], row[1]['min'], row[1]['max']
-        cursor.execute(sql.SQL("DELETE FROM stock_data WHERE \"Ticker\"=%s AND \"Date\" BETWEEN %s AND %s"), (ticker, start_date, end_date))
+        ticker, start_date, end_date = row[1]['ticker'], row[1]['min'], row[1]['max']
+        cursor.execute(sql.SQL("DELETE FROM stock_data WHERE \"ticker\"=%s AND \"date\" BETWEEN %s AND %s"), (ticker, start_date, end_date))
     
     # Commit all DELETE queries in a single transaction
     conn.commit()
     conn.close()
     
     # Step 3: Insert the new data
-    df.to_sql('stock_data', engine, if_exists='append', index=False)
+    df.to_sql('stock_data', engine, if_exists='append', index=False) #need to make df column and db column cases match!!!
 
 # Function to insert technical indicators into the technical_indicators table
 def insert_technical_indicators(indicator_data):
     conn = psycopg2.connect(
         host="localhost",
-        port="5432",
+        port="5433",
         dbname="localdev",
         user="shaun",
-        password="123456"
+        password="123546"
     )
     cursor = conn.cursor()
 

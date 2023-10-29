@@ -5,7 +5,7 @@ import psycopg2
 import pandas as pd
 import logging
 from io import StringIO
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Dict, Any
 
 def setup_logging():
@@ -41,7 +41,7 @@ def get_multi_ticker_data_pg(conn, tickers: List[str], days: int = 300) -> pd.Da
     date_from = datetime.now() - timedelta(days=days)
     query = """
     SELECT * FROM stock_data
-    WHERE "Ticker" = ANY(%s) AND "Date" >= %s
+    WHERE "ticker" = ANY(%s) AND "date" >= %s
     """
     df = pd.read_sql_query(query, conn, params=(tickers, date_from))
     logging.info("Finished retrieving ticker data into DataFrame")
@@ -74,14 +74,14 @@ def transform_to_db_format(df: pd.DataFrame, exchange: str, indicator_id_map: Di
     logging.info("Start transforming DF for insertion")
     dfs = []
     for indicator, indicator_id in indicator_id_map.items():
-        temp_df = df[['Ticker', 'Date', indicator]].copy()
+        temp_df = df[['ticker', 'date', indicator]].copy()
         temp_df['IndicatorID'] = indicator_id
         temp_df['Exchange'] = exchange
         temp_df['Value1'] = temp_df[indicator]
         temp_df = temp_df.drop(indicator, axis=1)
         dfs.append(temp_df)
     transformed_df = pd.concat(dfs, ignore_index=True)
-    transformed_df = transformed_df[['IndicatorID', 'Exchange', 'Ticker', 'Date', 'Value1']]
+    transformed_df = transformed_df[['IndicatorID', 'Exchange', 'ticker', 'date', 'Value1']]
     logging.info("Finished transforming DF for insertion")
     return transformed_df
 
@@ -93,7 +93,7 @@ def calculate_multiple_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate SMA indicators
     for window in [10, 50, 200]:
         col_name = f"SMA_{window}"
-        df_copy[col_name] = df_copy.groupby("Ticker")["Close"].transform(
+        df_copy[col_name] = df_copy.groupby("ticker")["close"].transform(
             lambda x: x.rolling(window=window).mean()
         )
         meta = {
@@ -105,7 +105,7 @@ def calculate_multiple_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate EMA indicators
     for span in [10, 50, 200]:
         col_name = f"EMA_{span}"
-        df_copy[col_name] = df_copy.groupby("Ticker")["Close"].transform(
+        df_copy[col_name] = df_copy.groupby("ticker")["close"].transform(
             lambda x: x.ewm(span=span, adjust=False).mean()
         )
         meta = {
@@ -115,11 +115,11 @@ def calculate_multiple_indicators(df: pd.DataFrame) -> pd.DataFrame:
         indicator_meta[col_name] = meta
 
     # Calculate RSI_14
-    df_copy["Delta"] = df_copy.groupby("Ticker")["Close"].transform(lambda x: x.diff())
-    df_copy["Gain"] = df_copy.groupby("Ticker")["Delta"].transform(lambda x: x.where(x > 0, 0))
-    df_copy["Loss"] = df_copy.groupby("Ticker")["Delta"].transform(lambda x: -x.where(x < 0, 0))
-    avg_gain = df_copy.groupby("Ticker")["Gain"].transform(lambda x: x.rolling(window=14).mean())
-    avg_loss = df_copy.groupby("Ticker")["Loss"].transform(lambda x: x.rolling(window=14).mean())
+    df_copy["Delta"] = df_copy.groupby("ticker")["close"].transform(lambda x: x.diff())
+    df_copy["Gain"] = df_copy.groupby("ticker")["Delta"].transform(lambda x: x.where(x > 0, 0))
+    df_copy["Loss"] = df_copy.groupby("ticker")["Delta"].transform(lambda x: -x.where(x < 0, 0))
+    avg_gain = df_copy.groupby("ticker")["Gain"].transform(lambda x: x.rolling(window=14).mean())
+    avg_loss = df_copy.groupby("ticker")["Loss"].transform(lambda x: x.rolling(window=14).mean())
     rs = avg_gain / avg_loss
     df_copy["RSI_14"] = 100 - (100 / (1 + rs))
     meta = {
@@ -129,10 +129,10 @@ def calculate_multiple_indicators(df: pd.DataFrame) -> pd.DataFrame:
     indicator_meta["RSI_14"] = meta
 
     # Calculate MACD_12_26_9
-    ema_12 = df_copy.groupby("Ticker")["Close"].transform(lambda x: x.ewm(span=12, adjust=False).mean())
-    ema_26 = df_copy.groupby("Ticker")["Close"].transform(lambda x: x.ewm(span=26, adjust=False).mean())
+    ema_12 = df_copy.groupby("ticker")["close"].transform(lambda x: x.ewm(span=12, adjust=False).mean())
+    ema_26 = df_copy.groupby("ticker")["close"].transform(lambda x: x.ewm(span=26, adjust=False).mean())
     df_copy["MACD_12_26_9_Line"] = ema_12 - ema_26
-    df_copy["MACD_12_26_9_Signal"] = df_copy.groupby("Ticker")["MACD_12_26_9_Line"].transform(
+    df_copy["MACD_12_26_9_Signal"] = df_copy.groupby("ticker")["MACD_12_26_9_Line"].transform(
         lambda x: x.ewm(span=9, adjust=False).mean()
     )
     df_copy["MACD_12_26_9"] = df_copy["MACD_12_26_9_Line"] - df_copy["MACD_12_26_9_Signal"]
@@ -155,6 +155,7 @@ def calculate_multiple_indicators(df: pd.DataFrame) -> pd.DataFrame:
 def delete_last_n_days_indicators_pg(conn, tickers, days=30):
     logging.info("Start deleting last N days of indicators")
     date_from = datetime.now() - timedelta(days=days)
+    date_from = date_from.date()
     query = """
     DELETE FROM technical_indicators
     WHERE \"ticker\" = ANY(%s) AND \"date\" >= %s
@@ -169,18 +170,18 @@ def write_indicators_to_db_pg(multi_ticker_data, conn, tickers):
     cur = conn.cursor()
 
     # Extract the last 30 days of indicators
-    last_30_days_df = multi_ticker_data[multi_ticker_data['Date'] >= (datetime.now() - timedelta(days=30))]
-    indicators, indicator_meta = calculate_multiple_indicators(last_30_days_df)
+    indicators, indicator_meta = calculate_multiple_indicators(multi_ticker_data)
+    last_30_days_df = indicators[indicators['date'] >= (date.today() - timedelta(days=30))]
     indicator_id_map = {}
     for indicator, metadata in indicator_meta.items():
         id = update_indicator_metadata_pg(
             conn, indicator, metadata["Parameters"], metadata["Description"]
         )
         indicator_id_map[indicator] = id
-    # Your existing logic for transforming data into DB format
-    transformed_last_30_days_df = transform_to_db_format(indicators, "TSX", indicator_id_map)
 
-    # Delete the last 30 days of indicators from the database
+    transformed_last_30_days_df = transform_to_db_format(last_30_days_df, "TSX", indicator_id_map)
+
+
     delete_last_n_days_indicators_pg(conn, tickers, days=30)
 
     # Insert the new last 30 days into the database
@@ -200,7 +201,7 @@ def process_all_tickers_pg(db_params: Dict[str, Any]):
     """
     conn = psycopg2.connect(**db_params)
     cur = conn.cursor()
-    cur.execute("SELECT DISTINCT \"Ticker\" FROM stock_data")
+    cur.execute("SELECT DISTINCT \"ticker\" FROM stock_data")
     tickers = [row[0] for row in cur.fetchall()]
     multi_ticker_data = get_multi_ticker_data_pg(conn, tickers)
     write_indicators_to_db_pg(multi_ticker_data, conn, tickers)
@@ -213,9 +214,9 @@ if __name__ == "__main__":
     db_params = {
         'dbname': 'localdev',
         'user': 'shaun',
-        'password': '123456',
+        'password': '123546',
         'host': 'localhost',
-        'port': 5432
+        'port': 5433
     }
     process_all_tickers_pg(db_params)
 
