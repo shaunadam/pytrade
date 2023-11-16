@@ -9,6 +9,8 @@ services:
       POSTGRES_USER: shaun
       POSTGRES_PASSWORD: 123546
       POSTGRES_DB: localdev
+    networks:
+      - my_network
     ports:
       - "5433:5432"
     volumes:
@@ -17,6 +19,8 @@ services:
   adminer:
     image: adminer
     container_name: my_adminer_container
+    networks:
+      - my_network
     ports:
       - "8080:8080"
 
@@ -27,6 +31,17 @@ services:
       - "8050:8050"  # Dash runs on port 8050 by default
     volumes:
       - ./dash/app:/usr/src/app  # Mount the app directory as a volume
+    networks:
+      - my_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
 
 volumes:
   my_postgres_data:
+
+networks:
+  my_network:
+    driver: bridge

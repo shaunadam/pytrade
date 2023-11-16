@@ -13,8 +13,10 @@ RUN pip install --trusted-host pypi.python.org -r requirements.txt
 EXPOSE 8050
 
 # Define environment variable for Dash to run in production (optional)
-ENV DASH_ENV=production
+ENV DASH_ENV=development
+ENV FLASK_ENV=development
+
 
 # Run app.py when the container launches
 WORKDIR /usr/src/app
-CMD ["python"]
+CMD ["python","app.py","--debug"]

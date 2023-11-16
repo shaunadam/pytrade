@@ -5,7 +5,7 @@ import yfinance as yf
 from pandas_datareader import data as pdr
 import requests
 import pandas as pd
-import db
+import data.db as db
 
 
 # Initialize logging
@@ -73,12 +73,24 @@ def fetch_historical_data(tickers, ex, start_date, end_date, limit=None):
         return None
     
     
+def main():
+    tickers = scrape_ticker_list('TSX')
+
+    if tickers:
+        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-11-24', end_date='2023-11-24', limit=None)
+        if data is not None:
+            db.upsert_stock_data_from_df(data)
+            logging.info("Successfully fetched and stored stock data.")
+        else:
+            logging.error("Failed to fetch stock data.")
+    else:
+        logging.error("Failed to fetch stock tickers.")
 
 if __name__ == '__main__':
     tickers = scrape_ticker_list('TSX')
 
     if tickers:
-        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-10-01', end_date='2023-10-28', limit=None)
+        data = fetch_historical_data(tickers, ex='TSX', start_date='2023-10-20', end_date='2023-11-24', limit=None)
         if data is not None:
             db.upsert_stock_data_from_df(data)
             logging.info("Successfully fetched and stored stock data.")

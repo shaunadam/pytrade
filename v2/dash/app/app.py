@@ -4,43 +4,79 @@ from dash import Dash, dcc, html, Input, Output
 import pandas as pd
 import plotly.express as px
 import psycopg2
+from datetime import datetime, timedelta
+from typing import List
+import dash_bootstrap_components as dbc
 
-# Sample code to initialize the Dash app
-app = Dash(__name__)
+import data.fetch as fetch
 
 db_params = {
-        'dbname': 'localdev',
-        'user': 'shaun',
-        'password': '123546',
-        'host': 'localhost',
-        'port': 5433
-    }
-
-# Sample code to connect to a PostgreSQL database
-def fetch_data():
-    conn = psycopg2.connect(**db_params)
-    sql_query = "SELECT * FROM stock_data LIMIT 100;"
-    df = pd.read_sql(sql_query, conn)
-    conn.close()
+    'dbname': 'localdev',
+    'user': 'shaun',
+    'password': '123546',
+    'host': 'my_postgres_container',
+    'port': 5432
+}
+def get_multi_ticker_data_pg(conn, tickers: List[str], date) -> pd.DataFrame:
+    #date_from = datetime.now() - timedelta(days=days)
+    query = """
+    SELECT * FROM stock_data
+    WHERE "ticker" = ANY(%s) AND "date" >= %s
+    order by "ticker","date"
+    """
+    df = pd.read_sql_query(query, conn, params=(tickers, date))
     return df
 
-# Sample Dash layout
-app.layout = html.Div([
-    html.H1("Stock Data Visualization"),
-    dcc.Dropdown(id='stock-selector', options=[{'label': 'AAPL', 'value': 'AAPL'}, {'label': 'GOOGL', 'value': 'GOOGL'}], value='AAPL'),
-    dcc.Graph(id='price-chart')
-])
+def ticker_list():
+    conn = psycopg2.connect(**db_params)
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT \"ticker\" FROM stock_data")
+    tickers = [row[0] for row in cur.fetchall()]
+    tick_list = []
+    for x in tickers:
+        tick_list.append({'value':x,'label':x})
+    conn.close()
+    return tick_list
 
-# Sample Dash callback to update the chart based on stock selection
+
+date_from = datetime.now() - timedelta(days=90)
+
+app = Dash(__name__, external_stylesheets=[dbc.themes.CYBORG])
+
+app.layout = dbc.Container([
+    dbc.Row(dbc.Col(html.Div("Stock Data Visualization"))),
+    dbc.Row([
+        dbc.Col(html.Button('Refresh Data',id='refreshData',n_clicks=0),width=3),
+        dbc.Col(html.Button('Calculate Indicators',id='refreshInd',n_clicks=0),width=3)]),
+    dbc.Row([
+        dbc.Col(dcc.Dropdown(id='stock-selector', options=ticker_list(), value='SU.TO', multi=True), width=6),
+        dbc.Col(dcc.DatePickerSingle(id='dStart',date=date_from), width=6)
+    ]),
+    dbc.Row(dbc.Col(dcc.Graph(id='price-chart'))),
+    dbc.Row(dbc.Col(html.Div(id='stat')))
+], fluid=True)
+
+
 @app.callback(
     Output('price-chart', 'figure'),
-    [Input('stock-selector', 'value')]
+    [Input('stock-selector', 'value')
+    ,Input('dStart','date')
+    ]
 )
-def update_chart(selected_stock):
-    filtered_df = df[df['stock'] == selected_stock]
-    fig = px.line(filtered_df, x='date', y='price', title=f'Historical Prices of {selected_stock}')
+def update_chart(selected_stock,date):
+    df = get_multi_ticker_data_pg(psycopg2.connect(**db_params),[selected_stock],date)
+    fig = px.line(df, x='date', y='adj close', title=f'Historical Prices of {selected_stock}', color='ticker')
     return fig
 
-# Uncomment the line below in your actual code to run the app
-# if __name__ == '__main__':
-#    app.run_server(debug=True)
+@app.callback(
+    Output('stat','children'),
+    Input('refreshData','n_clicks'),
+    prevent_initial_call=True
+)
+def update_data(clicks):
+    fetch.main()
+    return 'data retrieved.'
+
+
+if __name__ == '__main__':
+   app.run_server(debug=True, host='0.0.0.0')

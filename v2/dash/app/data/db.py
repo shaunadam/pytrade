@@ -6,8 +6,8 @@ from sqlalchemy import create_engine, text
 # Initialize the PostgreSQL database and tables
 def initialize_database():
     conn = psycopg2.connect(
-        host="localhost",
-        port="5433",
+        host="my_postgres_container",
+        port="5432",
         dbname="localdev",
         user="shaun",
         password="123546"
@@ -51,15 +51,15 @@ def initialize_database():
     conn.close()
 
 # Insert or Update stock data into the stock_data table from a DataFrame
-engine = create_engine('postgresql://shaun:123546@localhost:5433/localdev')
+engine = create_engine('postgresql://shaun:123546@my_postgres_container:5432/localdev')
 
 def upsert_stock_data_from_df(df):
     # Step 1: Identify overlapping date ranges for each Ticker
     overlap = df.groupby('ticker')['date'].agg(['min', 'max']).reset_index()
     
     conn = psycopg2.connect(
-        host="localhost",
-        port="5433",
+        host="my_postgres_container",
+        port="5432",
         dbname="localdev",
         user="shaun",
         password="123546"
@@ -81,8 +81,8 @@ def upsert_stock_data_from_df(df):
 # Function to insert technical indicators into the technical_indicators table
 def insert_technical_indicators(indicator_data):
     conn = psycopg2.connect(
-        host="localhost",
-        port="5433",
+        host="my_postgres_container",
+        port="5432",
         dbname="localdev",
         user="shaun",
         password="123546"
