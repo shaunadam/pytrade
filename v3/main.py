@@ -12,5 +12,5 @@ pu.refreshTSX(c.PERIOD)
 now = pendulum.now()
 
 start = now.subtract(years=c.TAYEARS).strftime('%Y-%m-%d')
-ta.updateTA()
+ta.updateTA(start)
 

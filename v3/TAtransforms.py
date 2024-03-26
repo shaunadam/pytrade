@@ -7,7 +7,7 @@ import db as db1
 import pendulum
 import const as c
 
-def buildTA(tickers=None):
+def buildTA(start,tickers=None):
      df = pu.getDF(start,period = 'D',ticker=tickers)
      df.set_index('Ticker',append=True,inplace=True,drop=True)
      df.drop('Date',axis=1,inplace=True)
@@ -30,7 +30,7 @@ def buildTA(tickers=None):
      df.rename(columns={'Adj_Close':'AdjClose'},inplace=True)
      return df
 
-def updateTA():
+def updateTA(start):
      tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
      tickers = db1.conn_read(db,tickerSQL)
      #tickers = ['ABX.TO','SU.TO']
@@ -42,7 +42,7 @@ def updateTA():
      prog = 0
      for ticks in db1.chunks(tickers,20):
           prog += len(ticks)
-          df = buildTA(ticks)
+          df = buildTA(start,ticks)
           print(f'Currently processing {prog} of {len(tickers)} tickers')
           print(ticks)
           DeleteData = "DELETE FROM marketData where ROWID IN (SELECT F.ROWID FROM marketData F JOIN taTMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
