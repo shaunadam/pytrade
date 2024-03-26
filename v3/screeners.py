@@ -1,12 +1,16 @@
 import pull_data as pu
 import pandas_ta as ta
 import pandas as pd
+import pendulum
+import const as c
 
 #df = pu.getDF('2021-01-01',period = 'D', ticker = ['SU.TO','ABX.TO'])
 #dfWeekly = pu.getDF('2021-01-01',period = 'W', ticker = ['SU.TO','ABX.TO'])
 
-def DailyChecks():
-    dfWeekly = pu.getDF('2021-01-01',period = 'W')
+def DailyChecks(start):
+
+
+    dfWeekly = pu.getDF(start,period = 'W')
 
     weeklyResults = []
 
@@ -24,14 +28,11 @@ def DailyChecks():
             ema2 = df2['EMAdiff'].iloc[-2]
 
 
-            if macd > 0 and ema >0 and (macd2<=0 or ema2<=0):
+            if macd > macd2 and ema > ema2:
+                weeklyResults.append([tick,1])
+            elif macd > macd2 or ema > ema2:
                 weeklyResults.append([tick,2])
-            '''
-            elif macd >0 and ema <=0:
-                weeklyResults.append([tick,1])
-            elif macd <=0 and ema > 0 :
-                weeklyResults.append([tick,1])
-            '''
+           
     
 
     weeklyTicks = []
@@ -62,4 +63,7 @@ def DailyChecks():
     df.to_excel(writer, sheet_name='DailyScreen', index=False)
     writer._save()
     
-DailyChecks()
+if __name__ == '__main__':
+    now = pendulum.now()
+    start = now.subtract(years=c.TAYEARS).strftime('%Y-%m-%d')
+    DailyChecks(start)

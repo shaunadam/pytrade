@@ -5,6 +5,9 @@ from pandas_datareader import data as pdr
 import yfinance as yf
 import pandas as pd
 import const as c
+import sqlite3 as sq
+from sqlite3 import Error
+import pendulum
 
 
 
@@ -125,11 +128,50 @@ def getDF(date,period = 'D',ticker = None):
         q =  "Select Ticker, Date,Open ,High , Low , Close, AdjClose, Volume, MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI from marketData where Date >='"+date+"'"
     df = db1.conn_read(db,q,False,False,cols)
     df =df.set_index([pd.DatetimeIndex(df['Date'])])
-    
-    
-    #need to get rid of this and just build a weekly table
-    if period == 'W':
-        df= df.groupby('Ticker').resample('W-MON',label='left',closed='left').agg({'Open':'first','High':'max','Low':'min','Close':'last','AdjClose':'last','Volume':'sum'})
-    df = df.rename(columns={"AdjClose":"Adj_Close"})
-    df = df.sort_index()
     return df
+
+
+#merge TA and this weekly functions into a module name processing
+#improve structure of this function - just barely pieced together
+#refactor to use be called from Main with parameters
+#refactor TA functions to be able to work on daily and weekly tables
+#finish screeners
+def dfWeekly(start,verbose = False):
+    db = c.DB
+    tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
+    tbl1 = "CREATE TABLE IF NOT EXISTS weeklyData (Exchange char(10), Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int, MACD float, EMA12 float, EMA26 float, EMA50 float, SMA12 float, SMA26 float, SMA50 float, RSI float)"
+    tbl1a = "CREATE UNIQUE INDEX weekly ON weeklyData(Date, Ticker)"
+    setup = [tbl1,tbl1a]
+    db1.conn_exec(db,setup)
+
+    tickers = db1.conn_read(db,tickerSQL)
+
+    prog = 0
+    for ticks in db1.chunks(tickers,200):
+        prog += len(ticks)
+        print(f'Currently processing {prog} of {len(tickers)} tickers')
+        if verbose == True:
+            print(ticks)
+        df = getDF(start, ticker=ticks)
+        df= df.groupby('Ticker').resample('W-MON',label='left',closed='left').agg({'Open':'first','High':'max','Low':'min','Close':'last','AdjClose':'last','Volume':'sum'})
+        df = df.sort_index()
+
+        DeleteData = "DELETE FROM weeklyData where ROWID IN (SELECT F.ROWID FROM marketData F JOIN weeklyTMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
+        insData = "INSERT INTO weeklyData SELECT 'TSX' 'Exchange', Ticker, Date,Open ,High , Low , Close, AdjClose, Volume ,null,null,null,null,null,null,null,null FROM weeklyTMP"
+        conn = None
+        try:
+            conn = sq.connect(db)
+            df.reset_index(inplace=True)
+            df.to_sql("weeklyTMP", conn,if_exists='replace', index=False)
+            db1.conn_exec(db,DeleteData)
+            db1.conn_exec(db,insData)
+
+        except Error as e:
+            print(e)
+        finally:
+            if conn:
+                conn.close()
+if __name__ == '__main__':
+    now = pendulum.now()
+    start = now.subtract(years=c.TAYEARS).strftime('%Y-%m-%d')
+    dfWeekly(start)
