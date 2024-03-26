@@ -31,11 +31,11 @@ def buildTA(start,tickers=None):
      return df
 
 def updateTA(start):
+     db = c.DB
      tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
      tickers = db1.conn_read(db,tickerSQL)
      #tickers = ['ABX.TO','SU.TO']
 
-     db = c.DB
      
 
 

@@ -16,7 +16,7 @@ def refreshTSX(p="1mo",secs = None):
     """
     print("Beginning Data Refresh")
     #SQLITE file
-    db = c.db
+    db = c.DB
 
     #Setup commands on SQLITE DB
     tbl1 = "CREATE TABLE IF NOT EXISTS marketData (Exchange char(10), Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int, MACD float, EMA12 float, EMA26 float, EMA50 float, SMA12 float, SMA26 float, SMA50 float, RSI float)"
