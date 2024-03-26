@@ -2,6 +2,7 @@
 settings.json
 launch.json
 postgres_data/
+.venv/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
