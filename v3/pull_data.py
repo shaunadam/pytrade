@@ -4,6 +4,7 @@ import requests
 from pandas_datareader import data as pdr
 import yfinance as yf
 import pandas as pd
+import const as c
 
 
 
@@ -15,7 +16,7 @@ def refreshTSX(p="1mo",secs = None):
     """
     print("Beginning Data Refresh")
     #SQLITE file
-    db = "HistoricalData/historicalData.db"
+    db = c.db
 
     #Setup commands on SQLITE DB
     tbl1 = "CREATE TABLE IF NOT EXISTS marketData (Exchange char(10), Ticker char(10), Date date,Open real,High real,Low real,Close real,AdjClose real,Volume int, MACD float, EMA12 float, EMA26 float, EMA50 float, SMA12 float, SMA26 float, SMA50 float, RSI float)"
@@ -44,7 +45,7 @@ def refreshTSX(p="1mo",secs = None):
             #requests_log.setLevel(logging.DEBUG)
             #requests_log.propagate = True
             print("Refreshing Tickers")
-            ti = requests.get(f"https://www.tsx.com/json/company-directory/search/tsx/%5E*",timeout=5,verify=False)
+            ti = requests.get(f"{c.TICKERURL}",timeout=5,verify=False)
             ti = ti.json()
             ti = ti['results']
             for key in ti:
@@ -109,7 +110,7 @@ def getDF(date,period = 'D',ticker = None):
     Can also specify period = 'W' for weekly resample.
     """
     cols = ['Ticker', 'Date','Open' ,'High' , 'Low' , 'Close', 'AdjClose', 'Volume','MACD' ,'EMA12','EMA26','EMA50','SMA12','SMA26','SMA50','RSI']
-    db = "HistoricalData/historicalData.db"
+    db = c.DB
     if ticker:
         if type(ticker) == list and len(ticker) >1:
             ticker = "','".join(ticker)

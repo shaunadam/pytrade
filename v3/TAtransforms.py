@@ -5,14 +5,8 @@ from sqlite3 import Error
 import pull_data as pu
 import db as db1
 import pendulum
+import const as c
 
-
-#fix date range at 14 to be dynamic and loop for all tickers
-
-#SQLITE file
-db = "HistoricalData/historicalData.db"
-now = pendulum.now()
-start = now.subtract(years=1).strftime('%Y-%m-%d')
 def buildTA(tickers=None):
      df = pu.getDF(start,period = 'D',ticker=tickers)
      df.set_index('Ticker',append=True,inplace=True,drop=True)
@@ -36,28 +30,34 @@ def buildTA(tickers=None):
      df.rename(columns={'Adj_Close':'AdjClose'},inplace=True)
      return df
 
-tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
-tickers = db1.conn_read(db,tickerSQL)
-#tickers = ['ABX.TO','SU.TO']
-prog = 0
-for ticks in db1.chunks(tickers,30):
-     prog += len(ticks)
-     df = buildTA(ticks)
-     print(f'Currently processing {prog} of {len(tickers)} tickers')
-     print(ticks)
-     DeleteData = "DELETE FROM marketData where ROWID IN (SELECT F.ROWID FROM marketData F JOIN taTMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
-     insData = "INSERT INTO marketData SELECT 'TSX', Ticker, Date,Open ,High , Low , Close, AdjClose, Volume ,MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI FROM taTMP"
-     conn = None
-     try:
-          conn = sq.connect(db)
-          df.to_sql("taTMP", conn,if_exists='replace', index=False)
-          db1.conn_exec(db,DeleteData)
-          db1.conn_exec(db,insData)
+def updateTA():
+     tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
+     tickers = db1.conn_read(db,tickerSQL)
+     #tickers = ['ABX.TO','SU.TO']
 
-     except Error as e:
-          print(e)
-     finally:
-          if conn:
-               conn.close()
+     db = c.DB
+     
+
+
+     prog = 0
+     for ticks in db1.chunks(tickers,20):
+          prog += len(ticks)
+          df = buildTA(ticks)
+          print(f'Currently processing {prog} of {len(tickers)} tickers')
+          print(ticks)
+          DeleteData = "DELETE FROM marketData where ROWID IN (SELECT F.ROWID FROM marketData F JOIN taTMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
+          insData = "INSERT INTO marketData SELECT 'TSX', Ticker, Date,Open ,High , Low , Close, AdjClose, Volume ,MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI FROM taTMP"
+          conn = None
+          try:
+               conn = sq.connect(db)
+               df.to_sql("taTMP", conn,if_exists='replace', index=False)
+               db1.conn_exec(db,DeleteData)
+               db1.conn_exec(db,insData)
+
+          except Error as e:
+               print(e)
+          finally:
+               if conn:
+                    conn.close()
 
 

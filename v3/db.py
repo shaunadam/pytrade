@@ -2,6 +2,7 @@ from sqlite3 import Error
 import sqlite3 as sq
 import requests
 import pandas as pd
+import const as c
 
 def conn_exec(db_file,c="",verbose=False):
     """ create a database connection to a SQLite database """
@@ -47,7 +48,7 @@ def conn_insert_df(tblName,df,db_file,insertMode = 'replace'):
 def conn_update_meta(val):
     """Updates the metadata table with the date ticker was last pulled
     """
-    db = "HistoricalData/historicalData.db"
+    db = c.DB
     conn = None
     try:
         conn = sq.connect(db)
