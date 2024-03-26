@@ -30,7 +30,7 @@ def buildTA(start,tickers=None):
      df.rename(columns={'Adj_Close':'AdjClose'},inplace=True)
      return df
 
-def updateTA(start):
+def updateTA(start,verbose=False):
      db = c.DB
      tickerSQL = "SELECT DISTINCT Ticker FROM marketData"
      tickers = db1.conn_read(db,tickerSQL)
@@ -44,7 +44,8 @@ def updateTA(start):
           prog += len(ticks)
           df = buildTA(start,ticks)
           print(f'Currently processing {prog} of {len(tickers)} tickers')
-          print(ticks)
+          if verbose == True:
+               print(ticks)
           DeleteData = "DELETE FROM marketData where ROWID IN (SELECT F.ROWID FROM marketData F JOIN taTMP T WHERE F.Ticker = T.Ticker and F.Date = T.Date)"
           insData = "INSERT INTO marketData SELECT 'TSX', Ticker, Date,Open ,High , Low , Close, AdjClose, Volume ,MACD ,EMA12,EMA26,EMA50,SMA12,SMA26,SMA50,RSI FROM taTMP"
           conn = None
