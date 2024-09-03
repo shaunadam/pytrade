@@ -66,7 +66,7 @@ project_root/
 - Updated main.py to use argparse for better control over operations
 
 ## Next Steps
-- [ ] Optimize dashboard performance further if needed
+- [ ] Improve UI of dash app to make it more user friendly and setup for future expansion. Allow user to pick indicators. Setup tabs.
 - [ ] Add more technical indicators to the dashboard (RSI, MACD, Bollinger Bands)
 - [ ] Implement backtesting module (src/backtesting/strategies.py)
 - [ ] Create custom screeners for TSX stocks

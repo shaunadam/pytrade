@@ -4,9 +4,9 @@ from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 import pandas as pd
 from src.data.fetcher import DataFetcher
-from config import DB_PATH, TSX_SYMBOLS
+from config import DB_PATH, TSX_SYMBOLS, START_DATE
 import dash_bootstrap_components as dbc
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # Initialize the Dash app with a Bootstrap theme
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -17,9 +17,9 @@ data_fetcher = DataFetcher(DB_PATH)
 # Initialize the data cache
 data_cache = {}
 
-# Calculate default date range
+# Calculate date range
 end_date = datetime.now().date()
-start_date = end_date - timedelta(days=180)
+start_date = pd.to_datetime(START_DATE).date()
 
 # Layout of the dashboard
 app.layout = dbc.Container(
