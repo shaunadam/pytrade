@@ -2,13 +2,14 @@ from sqlite3 import Error
 import sqlite3 as sq
 import pandas as pd
 
-def conn_exec(db_file,c="",verbose=False):
-    """ create a database connection to a SQLite database """
+
+def conn_exec(db_file, c="", verbose=False):
+    """create a database connection to a SQLite database and execute a command"""
     conn = None
     try:
         conn = sq.connect(db_file)
         if verbose:
-            print('Execute: ',c)
+            print("Execute: ", c)
         if isinstance(c, list):
             for com in c:
                 conn.cursor().execute(com)
@@ -23,19 +24,18 @@ def conn_exec(db_file,c="",verbose=False):
         if conn:
             conn.close()
 
-def conn_insert_df(tblName,df,db_file,insertMode = 'replace'):
-    """Inserts a dataframe into a SQLlite table.
-    If insertMode = 'repalce' the table will be deleted first.
-    """
+
+def conn_insert_df(db_file, tblName, df, insertMode="replace"):
+    """Inserts a dataframe into a SQLlite table."""
     conn = None
     try:
         conn = sq.connect(db_file)
-        if insertMode == 'replace':
-            dd = f"Delete From "+ tblName 
+        if insertMode == "replace":
+            dd = f"Delete From " + tblName
             conn.cursor().execute(dd)
             conn.commit()
 
-        df.to_sql(tblName, conn,if_exists='append', index=False)
+        df.to_sql(tblName, conn, if_exists="append", index=False)
 
     except Error as e:
         print(e)
@@ -43,16 +43,18 @@ def conn_insert_df(tblName,df,db_file,insertMode = 'replace'):
         if conn:
             conn.close()
 
-def conn_update_meta(val):
-    """Updates the metadata table with the date ticker was last pulled
+
+def conn_update_const(db_file, tblName, columns, values):
+    """Updates list of items that match a column in a table with the value of a constant.
+    values is a list of lists. Each outer list contains an inner list of values for the record.
     """
-    #import const as c
-    db = c.DB
+    columns = ",".join(columns)
     conn = None
     try:
-        conn = sq.connect(db)
-        for v in val:
-            c = f"REPLACE INTO Meta (Ticker,Refreshed) VALUES('"+v+"',datetime(CURRENT_TIMESTAMP, 'localtime'))"
+        conn = sq.connect(db_file)
+        for v in values:
+            v = ",".join(v)
+            c = f"REPLACE INTO " + tblName + " (" + columns + ") VALUES('" + v + "'))"
             conn.cursor().execute(c)
         conn.commit()
     except Error as e:
@@ -61,9 +63,10 @@ def conn_update_meta(val):
         if conn:
             conn.close()
 
-def conn_read(db_file,c="", verbose=False, single=True, cols = None, ind = None):
-    """Returns a single column as list (default) 
-    or selected cols from table, 
+
+def conn_read(db_file, c="", verbose=False, single=True, cols=None, ind=None):
+    """Returns a single column as list (default)
+    or selected cols from table,
     or entire dataframe from a table
     Can optionally set an index on the dataframe
     """
@@ -71,27 +74,22 @@ def conn_read(db_file,c="", verbose=False, single=True, cols = None, ind = None)
     try:
         conn = sq.connect(db_file)
         if verbose:
-            print('Execute: ',c)
+            print("Execute: ", c)
         if c != "":
             recs = conn.cursor().execute(c).fetchall()
-            
+
             if single:
                 records = []
                 for r in recs:
                     records.append(r[0])
             else:
-                
-                records = pd.DataFrame(recs,columns=cols)
+
+                records = pd.DataFrame(recs, columns=cols)
                 if ind:
-                    records = records.set_index(ind,True)
+                    records = records.set_index(ind, True)
             return records
     except Error as e:
         print(e)
     finally:
         if conn:
             conn.close()
-
-def chunks(lst, n):
-    """Yield successive n-sized chunks from lst."""
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]

@@ -19,7 +19,7 @@ def taUpdate():
     start = now.subtract(years=c.TAYEARS).strftime('%Y-%m-%d')
     ta.updateTA(start)
 
-mode = 3
+mode = 1
 if __name__ == '__main__':
     
     if mode == 1:

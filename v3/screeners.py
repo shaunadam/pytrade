@@ -1,8 +1,8 @@
 import pull_data as pu
-import pandas_ta as ta
 import pandas as pd
 import pendulum
 import const as c
+import pandas_ta as ta
 
 #df = pu.getDF('2021-01-01',period = 'D', ticker = ['SU.TO','ABX.TO'])
 #dfWeekly = pu.getDF('2021-01-01',period = 'W', ticker = ['SU.TO','ABX.TO'])
@@ -17,9 +17,9 @@ def DailyChecks(start):
     for tick, df2 in dfWeekly.groupby(level=0):
         df2.sort_values(by='Date',axis=0,inplace=True)
         if len(df2) >52:
-            df2.ta.macd(close='Adj_Close',append=True)
+            df2.ta.macd(close='AdjClose',append=True)
             df2['histDiff'] = df2['MACDh_12_26_9'].diff()
-            df2.ta.ema(close='Adj_Close',length=13,append=True)
+            df2.ta.ema(close='AdjClose',length=13,append=True)
             df2['EMAdiff'] = df2['EMA_13'].diff()
             last = df2.iloc[-1,:]
             macd = last['histDiff']
@@ -46,9 +46,9 @@ def DailyChecks(start):
 
     for tick, df2 in dfDaily.groupby('Ticker'):
         if len(df2) >140:
-            df2.ta.macd(close='Adj_Close',append=True)
+            df2.ta.macd(close='AdjClose',append=True)
             df2['histDiff'] = df2['MACDh_12_26_9'].diff()
-            df2.ta.ema(close='Adj_Close',length=13,append=True)
+            df2.ta.ema(close='AdjClose',length=13,append=True)
             df2['EMAdiff'] = df2['EMA_13'].diff()
             last = df2.iloc[-1,:]
             macd = last['histDiff']

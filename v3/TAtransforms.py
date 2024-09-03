@@ -1,10 +1,8 @@
-import pandas as pd
-import pandas_ta as ta
 import sqlite3 as sq
 from sqlite3 import Error
 import pull_data as pu
 import db as db1
-import pendulum
+import pandas_ta as ta
 import const as c
 
 def buildTA(start,tickers=None):
@@ -16,18 +14,18 @@ def buildTA(start,tickers=None):
      for tick, df2 in df.groupby(level=0):
           if len(df2)>50:
                df2.drop(['MACD','EMA12','EMA26','EMA50','SMA12','SMA26','SMA50'],axis=1,inplace=True)
-               df2.ta.macd(close='Adj_Close',append=True)
-               df2.ta.ema(close='Adj_Close',length=12,append=True)
-               df2.ta.ema(close='Adj_Close',length=26,append=True)
-               df2.ta.ema(close='Adj_Close',length=50,append=True)
+               df2.ta.macd(close='AdjClose',append=True)
+               df2.ta.ema(close='AdjClose',length=12,append=True)
+               df2.ta.ema(close='AdjClose',length=26,append=True)
+               df2.ta.ema(close='AdjClose',length=50,append=True)
 
-               df2.ta.sma(close='Adj_Close',length=12,append=True)
-               df2.ta.sma(close='Adj_Close',length=26,append=True)
-               df2.ta.sma(close='Adj_Close',length=50,append=True)
+               df2.ta.sma(close='AdjClose',length=12,append=True)
+               df2.ta.sma(close='AdjClose',length=26,append=True)
+               df2.ta.sma(close='AdjClose',length=50,append=True)
                df2.rename(columns={'MACDh_12_26_9':'MACD','EMA_12':'EMA12','EMA_26':'EMA26','EMA_50':'EMA50','SMA_12':'SMA12','SMA_26':'SMA26','SMA_50':'SMA50'},inplace=True)
                df.update(df2)
      df.reset_index(inplace=True)
-     df.rename(columns={'Adj_Close':'AdjClose'},inplace=True)
+     df.rename(columns={'AdjClose':'AdjClose'},inplace=True)
      return df
 
 def updateTA(start,verbose=False):
