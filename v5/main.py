@@ -2,25 +2,22 @@ from src.data.fetcher import DataFetcher
 from src.visualization.dashboard import app as dashboard_app
 from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
 import pandas as pd
+import argparse
 
 
-def main():
+def update_data():
     fetcher = DataFetcher(DB_PATH)
     fetcher.update_all_stocks(TSX_SYMBOLS, START_DATE, END_DATE)
 
 
 def test_indicators():
     fetcher = DataFetcher(DB_PATH)
-
-    # Test for the first symbol in the list
     symbol = TSX_SYMBOLS[0]
     data = fetcher.get_stock_data_with_indicators(symbol, START_DATE, END_DATE)
 
     if data is not None:
         print(f"Data for {symbol}:")
         print(data.head())
-
-        # Check if indicators are present
         indicators = [
             "SMA",
             "EMA",
@@ -33,13 +30,10 @@ def test_indicators():
             "BB_Lower",
         ]
         missing_indicators = [ind for ind in indicators if ind not in data.columns]
-
         if not missing_indicators:
             print("All indicators are present in the data.")
         else:
             print(f"Missing indicators: {', '.join(missing_indicators)}")
-
-        # Display some statistics
         print("\nData statistics:")
         print(data.describe())
     else:
@@ -51,8 +45,18 @@ def run_dashboard():
 
 
 if __name__ == "__main__":
-    main()
-    print("\nTesting indicators:")
-    test_indicators()
-    print("\nStarting dashboard:")
-    run_dashboard()
+    parser = argparse.ArgumentParser(description="TSX Stock Analysis Tool")
+    parser.add_argument("--update", action="store_true", help="Update stock data")
+    parser.add_argument("--test", action="store_true", help="Test indicators")
+    parser.add_argument("--dashboard", action="store_true", help="Run the dashboard")
+    args = parser.parse_args()
+
+    if args.update:
+        update_data()
+    if args.test:
+        test_indicators()
+    if args.dashboard:
+        run_dashboard()
+
+    if not (args.update or args.test or args.dashboard):
+        print("No action specified. Use --update, --test, or --dashboard")

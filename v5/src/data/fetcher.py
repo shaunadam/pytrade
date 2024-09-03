@@ -112,6 +112,7 @@ class DataFetcher:
         # Convert to DataFrame
         df = pd.DataFrame([d.__dict__ for d in daily_data])
         df.set_index("date", inplace=True)
+        df.index = pd.to_datetime(df.index)
 
         # Add indicators
         for indicator in indicators:

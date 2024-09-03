@@ -4,7 +4,9 @@
 - Basic project structure set up
 - SQLite database initialized with schema for stocks and daily data
 - Data fetching implemented using yfinance for TSX symbols
-- Simple CLI interface to update stock data
+- Technical indicators calculation implemented (SMA, EMA, RSI, MACD, Bollinger Bands)
+- Basic Plotly Dash dashboard created for data visualization
+- Command-line interface for updating data, testing indicators, and running the dashboard
 
 ## Project Structure
 ```
@@ -43,7 +45,6 @@ project_root/
 ├── requirements.txt
 ├── .gitignore
 └── PROJECT_STATUS.md
-
 ```
 
 ## Completed Tasks
@@ -54,12 +55,23 @@ project_root/
 - [x] Main script for data updates (main.py)
 - [x] .gitignore file
 - [x] Create module for technical indicators (src/analysis/indicators.py)
+- [x] Implement basic Plotly Dash dashboard (src/visualization/dashboard.py)
+- [x] Add command-line interface for different operations
+
+## Recent Updates
+- Implemented a basic Plotly Dash dashboard for visualizing stock data
+- Added technical indicators (SMA, EMA) to the dashboard
+- Implemented data caching to improve dashboard performance
+- Added date range selection functionality to the dashboard
+- Updated main.py to use argparse for better control over operations
 
 ## Next Steps
-
-- [ ] Develop Plotly Dash frontend for data visualization (src/visualization/dashboard.py)
+- [ ] Optimize dashboard performance further if needed
+- [ ] Add more technical indicators to the dashboard (RSI, MACD, Bollinger Bands)
 - [ ] Implement backtesting module (src/backtesting/strategies.py)
-- [ ] Optimize data storage and retrieval
+- [ ] Create custom screeners for TSX stocks
+- [ ] Develop and test swing trading strategies
+- [ ] Enhance the user interface with more interactive features
 - [ ] Write unit tests (in the tests/ directory)
 
 ## Overall Goals
@@ -73,11 +85,24 @@ project_root/
 - SQLite
 - SQLAlchemy
 - yfinance
-- Plotly Dash (planned)
+- Plotly Dash
+- Pandas
 
 ## Key Files
 - `config.py`: Contains configuration variables like database path, stock symbols, and date ranges
-- `main.py`: Entry point for running data updates
+- `main.py`: Entry point for running data updates, testing indicators, and launching the dashboard
 - `src/database/init_db.py`: Initializes the SQLite database and defines the schema
 - `src/data/fetcher.py`: Handles fetching and updating stock data
+- `src/analysis/indicators.py`: Calculates technical indicators
+- `src/visualization/dashboard.py`: Implements the Plotly Dash dashboard
 - `requirements.txt`: Lists all Python dependencies for the project
+
+## Usage
+To run different parts of the project:
+1. Update stock data: `python main.py --update`
+2. Test indicators: `python main.py --test`
+3. Run the dashboard: `python main.py --dashboard`
+
+## Known Issues
+- Dashboard performance may need further optimization for larger datasets
+- Some technical indicators may need refinement in calculation or display

@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -37,6 +38,8 @@ class DailyData(Base):
     volume = Column(Integer, nullable=False)
     stock = relationship("Stock", back_populates="daily_data")
 
+    __table_args__ = (Index("idx_daily_data_stock_date", "stock_id", "date"),)
+
 
 class TechnicalIndicator(Base):
     __tablename__ = "technical_indicators"
@@ -46,6 +49,8 @@ class TechnicalIndicator(Base):
     indicator_name = Column(String, nullable=False)
     value = Column(Float, nullable=False)
     stock = relationship("Stock", back_populates="technical_indicators")
+
+    __table_args__ = (Index("idx_technical_indicators_stock_date", "stock_id", "date"),)
 
 
 def init_db(db_path):
