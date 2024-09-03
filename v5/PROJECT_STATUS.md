@@ -66,12 +66,12 @@ project_root/
 - Updated main.py to use argparse for better control over operations
 
 ## Next Steps
-- [ ] Improve UI of dash app to make it more user friendly and setup for future expansion. Allow user to pick indicators. Setup tabs.
+- [ ] Setup tabs to make dash app look nice and setup for future expansion. Use dark theme.
+- [ ] Allow user to pick indicators. Add a volume chart below the price candlesticks chart and force the xaxis to stay aligned.
 - [ ] Add more technical indicators to the dashboard (RSI, MACD, Bollinger Bands)
 - [ ] Implement backtesting module (src/backtesting/strategies.py)
 - [ ] Create custom screeners for TSX stocks
 - [ ] Develop and test swing trading strategies
-- [ ] Enhance the user interface with more interactive features
 - [ ] Write unit tests (in the tests/ directory)
 
 ## Overall Goals
@@ -104,5 +104,4 @@ To run different parts of the project:
 3. Run the dashboard: `python main.py --dashboard`
 
 ## Known Issues
-- Dashboard performance may need further optimization for larger datasets
 - Some technical indicators may need refinement in calculation or display
