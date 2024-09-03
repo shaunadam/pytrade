@@ -1,3 +1,6 @@
 yfinance
 sqlalchemy
 pandas
+plotly
+dash
+dash-bootstrap-components

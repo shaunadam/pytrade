@@ -22,6 +22,7 @@ class Stock(Base):
     name = Column(String)
     last_updated = Column(DateTime)
     daily_data = relationship("DailyData", back_populates="stock")
+    technical_indicators = relationship("TechnicalIndicator", back_populates="stock")
 
 
 class DailyData(Base):
@@ -35,6 +36,16 @@ class DailyData(Base):
     close = Column(Float, nullable=False)
     volume = Column(Integer, nullable=False)
     stock = relationship("Stock", back_populates="daily_data")
+
+
+class TechnicalIndicator(Base):
+    __tablename__ = "technical_indicators"
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"))
+    date = Column(Date, nullable=False)
+    indicator_name = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
+    stock = relationship("Stock", back_populates="technical_indicators")
 
 
 def init_db(db_path):
