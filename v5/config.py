@@ -1,20 +1,29 @@
 import os
+import json
+import requests
 
 # Database
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "stocks.db")
 
-# Data
-TSX_SYMBOLS = [
-    "SHOP.TO",
-    "RY.TO",
-    "TD.TO",
-    "ENB.TO",
-    "CNR.TO",
-]  # Add more TSX symbols as needed
-START_DATE = "2020-01-01"
-END_DATE = "2024-12-31"
 
-# API
-ALPHA_VANTAGE_API_KEY = (
-    "your_alpha_vantage_api_key_here"  # If you decide to use Alpha Vantage
-)
+# Data
+def load_tsx_symbols():
+    url = "https://www.tsx.com/json/company-directory/search/tsx/%5E*"
+    response = requests.get(url)
+    data = response.json()
+
+    symbols = []
+    for company in data["results"]:
+        symbol = company["symbol"]
+        # Add '.TO' suffix if not already present
+        if not symbol.endswith(".TO"):
+            symbol += ".TO"
+        symbols.append(symbol)
+
+    return symbols
+
+
+TSX_SYMBOLS = load_tsx_symbols()
+
+START_DATE = "2024-09-01"
+END_DATE = "2024-12-31"

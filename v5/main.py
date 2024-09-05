@@ -3,17 +3,31 @@ from src.visualization.dashboard import app as dashboard_app
 from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
 import pandas as pd
 import argparse
+import yfinance as yf
 
 
 def update_data():
     fetcher = DataFetcher(DB_PATH)
-    fetcher.update_all_stocks(TSX_SYMBOLS, START_DATE, END_DATE)
+    try:
+        print(f"Updating data for all TSX symbols")
+        fetcher.update_all_stocks(TSX_SYMBOLS, START_DATE, END_DATE)
+    except Exception as e:
+        print(f"Error updating stocks: {str(e)}")
 
 
 def test_indicators():
     fetcher = DataFetcher(DB_PATH)
-    symbol = TSX_SYMBOLS[0]
-    data = fetcher.get_stock_data_with_indicators(symbol, START_DATE, END_DATE)
+    # Use the first valid symbol for testing
+    for symbol in TSX_SYMBOLS:
+        try:
+            data = fetcher.get_stock_data_with_indicators(symbol, START_DATE, END_DATE)
+            if data is not None and not data.empty:
+                break
+        except Exception:
+            continue
+    else:
+        print("No valid symbols found for testing")
+        return
 
     if data is not None:
         print(f"Data for {symbol}:")
