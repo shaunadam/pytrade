@@ -11,6 +11,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+# upserts are failing I think. Need to remove the logging so I can see what's going on.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -61,85 +62,70 @@ class DataFetcher:
         indicators["MACD"] = macd_data["MACD"]
         return pd.DataFrame(indicators)
 
-    def update_all_stocks(self, symbols, start_date, end_date):
-        session = self.Session()
-        logger.info(f"Fetching data for {len(symbols)} symbols")
-        all_data = self.fetch_stock_data(symbols, start_date, end_date)
+    def set_update_progress(self, progress):
+        self.update_progress = progress
 
-        if all_data.empty:
-            logger.error("Failed to fetch any stock data")
+    def get_update_progress(self):
+        return self.update_progress
+
+    def update_stock(self, symbol, start_date, end_date):
+        data = self.fetch_stock_data([symbol], start_date, end_date)
+        if data.empty:
+            logger.warning(f"No data found for {symbol}. Skipping.")
             return
 
-        daily_data_list = []
-        indicator_data_list = []
-        stocks_to_update = []
+        session = self.Session()
+        stock = session.execute(
+            select(Stock).filter_by(symbol=symbol)
+        ).scalar_one_or_none()
+        if not stock:
+            stock = Stock(symbol=symbol, name=symbol)
+            session.add(stock)
+            session.flush()
 
-        for symbol in symbols:
-            if symbol not in all_data.columns.levels[0]:
-                logger.warning(f"No data found for {symbol}. Skipping.")
-                continue
+        symbol_data = data[symbol]
+        indicators = self.calculate_indicators(symbol_data["Close"])
 
-            symbol_data = all_data[symbol]
-            if symbol_data.empty:
-                logger.warning(f"Empty data for {symbol}. Skipping.")
-                continue
+        daily_data = symbol_data.reset_index()
+        daily_data["stock_id"] = stock.id
+        daily_data = daily_data.rename(
+            columns={
+                "Date": "date",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
+        daily_data = daily_data.dropna()
 
-            stock = session.execute(
-                select(Stock).filter_by(symbol=symbol)
-            ).scalar_one_or_none()
-            if not stock:
-                stock = Stock(symbol=symbol, name=symbol)
-                session.add(stock)
-                session.flush()
+        indicator_data = indicators.reset_index()
+        indicator_data["stock_id"] = stock.id
+        indicator_data = indicator_data.melt(
+            id_vars=["Date", "stock_id"], var_name="indicator_name", value_name="value"
+        )
+        indicator_data = indicator_data.rename(columns={"Date": "date"})
+        indicator_data = indicator_data.dropna()
 
-            indicators = self.calculate_indicators(symbol_data["Close"])
+        self.bulk_upsert_daily_data(
+            session,
+            daily_data[["stock_id", "date", "open", "high", "low", "close", "volume"]],
+        )
+        self.bulk_upsert_indicator_data(session, indicator_data)
 
-            daily_data = symbol_data.reset_index()
-            daily_data["stock_id"] = stock.id
-            daily_data = daily_data.rename(
-                columns={
-                    "Date": "date",
-                    "Open": "open",
-                    "High": "high",
-                    "Low": "low",
-                    "Close": "close",
-                    "Volume": "volume",
-                }
-            )
-            daily_data = daily_data.dropna()
-            daily_data_list.append(
-                daily_data[
-                    ["stock_id", "date", "open", "high", "low", "close", "volume"]
-                ]
-            )
-
-            indicator_data = indicators.reset_index()
-            indicator_data["stock_id"] = stock.id
-            indicator_data = indicator_data.melt(
-                id_vars=["Date", "stock_id"],
-                var_name="indicator_name",
-                value_name="value",
-            )
-            indicator_data = indicator_data.rename(columns={"Date": "date"})
-            indicator_data = indicator_data.dropna()
-            indicator_data_list.append(indicator_data)
-
-            stocks_to_update.append(
-                {"id": stock.id, "last_updated": datetime.now().date()}
-            )
-
-        all_daily_data = pd.concat(daily_data_list, ignore_index=True)
-        all_indicator_data = pd.concat(indicator_data_list, ignore_index=True)
-
-        self.bulk_upsert_daily_data(session, all_daily_data)
-        self.bulk_upsert_indicator_data(session, all_indicator_data)
-
-        session.bulk_update_mappings(Stock, stocks_to_update)
-
+        stock.last_updated = datetime.now().date()
         session.commit()
         session.close()
 
-        logger.info(f"Updated {len(symbols)} stocks successfully")
+    def update_all_stocks(self, symbols, start_date, end_date):
+        total_symbols = len(symbols)
+        for i, symbol in enumerate(symbols):
+            try:
+                self.update_stock(symbol, start_date, end_date)
+            except Exception as e:
+                logger.error(f"Error updating {symbol}: {str(e)}")
+            self.set_update_progress((i + 1) / total_symbols * 100)
 
     def bulk_upsert_daily_data(self, session, df):
         df["date"] = df["date"].dt.date  # Convert to Python date objects
@@ -225,11 +211,30 @@ class DataFetcher:
 
         session.close()
 
+        if not daily_data:
+            return None
+
+        # Create DataFrame from daily data
         df = pd.DataFrame([d.__dict__ for d in daily_data])
+        df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
         df.set_index("date", inplace=True)
         df.index = pd.to_datetime(df.index)
 
-        for indicator in indicators:
-            df.loc[indicator.date, indicator.indicator_name] = indicator.value
+        # Create DataFrame from indicators
+        indicator_data = [
+            (ind.date, ind.indicator_name, ind.value) for ind in indicators
+        ]
+        indicator_df = pd.DataFrame(
+            indicator_data, columns=["date", "indicator_name", "value"]
+        )
+        indicator_df["date"] = pd.to_datetime(indicator_df["date"])
+
+        # Pivot the indicator DataFrame
+        indicator_df = indicator_df.pivot(
+            index="date", columns="indicator_name", values="value"
+        )
+
+        # Merge daily data with indicator data
+        df = df.join(indicator_df)
 
         return df

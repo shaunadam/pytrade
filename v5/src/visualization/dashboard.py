@@ -7,6 +7,7 @@ from src.data.fetcher import DataFetcher
 from config import DB_PATH, TSX_SYMBOLS, START_DATE
 import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
+import threading
 
 # Initialize the Dash app with a dark Bootstrap theme
 app = dash.Dash(
@@ -103,6 +104,7 @@ app.layout = dbc.Container(
                 dbc.Tab(label="Technical Analysis", tab_id="analysis"),
                 dbc.Tab(label="Stock Screening", tab_id="screening"),
                 dbc.Tab(label="Backtesting", tab_id="backtesting"),
+                dbc.Tab(label="Utility", tab_id="utility"),
             ],
             id="tabs",
             active_tab="analysis",
@@ -110,6 +112,62 @@ app.layout = dbc.Container(
         html.Div(id="tab-content", className="mt-4"),
     ]
 )
+
+
+def render_utility_tab(session_data):
+    return dbc.Card(
+        [
+            dbc.CardBody(
+                [
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    html.H4("Override Date Range"),
+                                    dcc.DatePickerRange(
+                                        id="override-date-range",
+                                        min_date_allowed=start_date,
+                                        max_date_allowed=end_date,
+                                        start_date=session_data["start_date"],
+                                        end_date=session_data["end_date"],
+                                        className="mb-3",
+                                    ),
+                                ],
+                                width=6,
+                            ),
+                            dbc.Col(
+                                [
+                                    html.H4("Update Stock Data"),
+                                    dbc.Button(
+                                        "Download Stock Data",
+                                        id="download-button",
+                                        color="primary",
+                                        className="mb-3",
+                                    ),
+                                ],
+                                width=6,
+                            ),
+                        ]
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                [
+                                    html.Div(id="download-status"),
+                                    dcc.Interval(
+                                        id="download-progress-interval",
+                                        interval=1000,  # in milliseconds
+                                        n_intervals=0,
+                                        disabled=True,
+                                    ),
+                                ]
+                            )
+                        ]
+                    ),
+                ]
+            )
+        ]
+    )
 
 
 @app.callback(
@@ -124,6 +182,8 @@ def render_tab_content(active_tab, session_data):
         return html.P("Stock Screening tab content (to be implemented)")
     elif active_tab == "backtesting":
         return html.P("Backtesting tab content (to be implemented)")
+    elif active_tab == "utility":
+        return render_utility_tab(session_data)
 
 
 def render_analysis_tab(session_data):
@@ -230,7 +290,23 @@ def update_graph(selected_stock, start_date, end_date):
     )
 
     if df is None or df.empty:
-        return go.Figure()
+        # Return a figure with a text annotation if no data is available
+        fig = go.Figure()
+        fig.add_annotation(
+            text="No data available for the selected stock and date range",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+        fig.update_layout(
+            title=f"{selected_stock} - No Data Available",
+            xaxis_title="Date",
+            yaxis_title="Price",
+            template="plotly_dark",
+        )
+        return fig
 
     candlestick = go.Candlestick(
         x=df.index,
@@ -241,14 +317,30 @@ def update_graph(selected_stock, start_date, end_date):
         name="Price",
     )
 
-    sma_trace = go.Scatter(
-        x=df.index, y=df["SMA"], mode="lines", name="SMA", line=dict(color="blue")
-    )
-    ema_trace = go.Scatter(
-        x=df.index, y=df["EMA"], mode="lines", name="EMA", line=dict(color="orange")
-    )
+    traces = [candlestick]
 
-    fig = go.Figure(data=[candlestick, sma_trace, ema_trace])
+    # Add SMA and EMA traces if available
+    if "SMA50" in df.columns:
+        sma_trace = go.Scatter(
+            x=df.index,
+            y=df["SMA50"],
+            mode="lines",
+            name="SMA50",
+            line=dict(color="blue"),
+        )
+        traces.append(sma_trace)
+
+    if "EMA50" in df.columns:
+        ema_trace = go.Scatter(
+            x=df.index,
+            y=df["EMA50"],
+            mode="lines",
+            name="EMA50",
+            line=dict(color="orange"),
+        )
+        traces.append(ema_trace)
+
+    fig = go.Figure(data=traces)
 
     fig.update_layout(
         title=f"{selected_stock} Stock Price",
@@ -259,6 +351,42 @@ def update_graph(selected_stock, start_date, end_date):
     )
 
     return fig
+
+
+@app.callback(
+    Output("download-status", "children"),
+    Output("download-progress-interval", "disabled"),
+    Input("download-button", "n_clicks"),
+    Input("download-progress-interval", "n_intervals"),
+    State("override-date-range", "start_date"),
+    State("override-date-range", "end_date"),
+    prevent_initial_call=True,
+)
+def update_stock_data(n_clicks, n_intervals, start_date, end_date):
+    ctx = dash.callback_context
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if trigger_id == "download-button" and n_clicks:
+        # Start the download process in a separate thread
+        threading.Thread(
+            target=data_fetcher.update_all_stocks,
+            args=(TSX_SYMBOLS, start_date, end_date),
+        ).start()
+        return dbc.Progress(value=0, id="download-progress"), False
+
+    if trigger_id == "download-progress-interval":
+        # Update the progress bar
+        progress = data_fetcher.get_update_progress()
+        if progress < 100:
+            return dbc.Progress(value=progress, id="download-progress"), False
+        else:
+            return "Download complete!", True
+
+    return dash.no_update, dash.no_update
+
+
+if __name__ == "__main__":
+    app.run_server(debug=True)
 
 
 @app.callback(

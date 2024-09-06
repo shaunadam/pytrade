@@ -61,6 +61,10 @@ def run_dashboard():
     dashboard_app.run_server(debug=True)
 
 
+def run_dashboard():
+    dashboard_app.run_server(debug=True)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TSX Stock Analysis Tool")
     parser.add_argument("--update", action="store_true", help="Update stock data")
@@ -69,7 +73,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.update:
-        update_data()
+        update_data(["CN.TO", "TD.TO"])
     if args.test:
         test_indicators()
     if args.dashboard:
