@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -29,7 +30,7 @@ class Stock(Base):
 class DailyData(Base):
     __tablename__ = "daily_data"
     id = Column(Integer, primary_key=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"))
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     date = Column(Date, nullable=False)
     open = Column(Float, nullable=False)
     high = Column(Float, nullable=False)
@@ -38,19 +39,27 @@ class DailyData(Base):
     volume = Column(Integer, nullable=False)
     stock = relationship("Stock", back_populates="daily_data")
 
-    __table_args__ = (Index("idx_daily_data_stock_date", "stock_id", "date"),)
+    __table_args__ = (
+        UniqueConstraint("stock_id", "date", name="uix_stock_date"),
+        Index("idx_daily_data_stock_date", "stock_id", "date"),
+    )
 
 
 class TechnicalIndicator(Base):
     __tablename__ = "technical_indicators"
     id = Column(Integer, primary_key=True)
-    stock_id = Column(Integer, ForeignKey("stocks.id"))
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
     date = Column(Date, nullable=False)
     indicator_name = Column(String, nullable=False)
     value = Column(Float, nullable=False)
     stock = relationship("Stock", back_populates="technical_indicators")
 
-    __table_args__ = (Index("idx_technical_indicators_stock_date", "stock_id", "date"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "stock_id", "date", "indicator_name", name="uix_stock_date_indicator"
+        ),
+        Index("idx_technical_indicators_stock_date", "stock_id", "date"),
+    )
 
 
 def init_db(db_path):
