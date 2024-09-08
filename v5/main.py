@@ -73,11 +73,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.update:
-        update_data(["CN.TO", "TD.TO"])
+        update_data(["SU.TO", "TD.TO"])
+        # update_data()
     if args.test:
         test_indicators()
     if args.dashboard:
         run_dashboard()
 
     if not (args.update or args.test or args.dashboard):
+        run_dashboard()
         print("No action specified. Use --update, --test, or --dashboard")

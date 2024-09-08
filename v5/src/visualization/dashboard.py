@@ -372,15 +372,21 @@ def update_stock_data(n_clicks, n_intervals, start_date, end_date):
             target=data_fetcher.update_all_stocks,
             args=(TSX_SYMBOLS, start_date, end_date),
         ).start()
-        return dbc.Progress(value=0, id="download-progress"), False
+        return [
+            dbc.Progress(value=0, id="download-progress"),
+            html.Div(id="download-message", children="Initializing..."),
+        ], False
 
     if trigger_id == "download-progress-interval":
-        # Update the progress bar
-        progress = data_fetcher.get_update_progress()
+        # Update the progress bar and message
+        progress, message = data_fetcher.get_update_progress()
         if progress < 100:
-            return dbc.Progress(value=progress, id="download-progress"), False
+            return [
+                dbc.Progress(value=progress, id="download-progress"),
+                html.Div(id="download-message", children=message),
+            ], False
         else:
-            return "Download complete!", True
+            return f"Download complete: {message}", True
 
     return dash.no_update, dash.no_update
 
