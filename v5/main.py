@@ -73,8 +73,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.update:
-        update_data(["SU.TO", "TD.TO"])
-        # update_data()
+        # update_data(["SU.TO", "TD.TO"])
+        update_data()
     if args.test:
         test_indicators()
     if args.dashboard:
