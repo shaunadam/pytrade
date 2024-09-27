@@ -14,10 +14,9 @@
 - Designed a new structure for the dashboard with tabs for different functionalities
 - Planned implementation of config-driven development for backtesting and screening
 - Refactored the Dash app to use the new tabbed structure
+- Add a Utility tab for overriding the start date / end date and a button to manually tigger downloading stock data.
 
 ## Next Steps
-
-- [ ] Add a Utility tab for overriding the start date / end date and a button to manually tigger downloading stock data. Implement a progress bar or scrolling log so the user can see progress
 - [ ] Implement config-driven development for screening criteria, and backtesting strategies
 - [ ] Create separate components for each major feature (e.g., StockChart, IndicatorPanel, Screener)
 - [ ] Implement lazy loading for tab content using callbacks

@@ -6,14 +6,14 @@ import argparse
 import yfinance as yf
 
 
-def update_data(symbols: list = None):
+def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
     fetcher = DataFetcher(DB_PATH)
     if symbols:
-        fetcher.update_all_stocks(symbols, START_DATE, END_DATE)
+        fetcher.update_all_stocks(symbols, start_date, end_date)
     else:
         try:
             print(f"Updating data for all TSX symbols")
-            fetcher.update_all_stocks(TSX_SYMBOLS, START_DATE, END_DATE)
+            fetcher.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
         except Exception as e:
             print(f"Error updating stocks: {str(e)}")
 

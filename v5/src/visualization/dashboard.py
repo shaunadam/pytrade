@@ -104,7 +104,7 @@ app.layout = dbc.Container(
                 dbc.Tab(label="Technical Analysis", tab_id="analysis"),
                 dbc.Tab(label="Stock Screening", tab_id="screening"),
                 dbc.Tab(label="Backtesting", tab_id="backtesting"),
-                dbc.Tab(label="Utility", tab_id="utility"),
+                dbc.Tab(label="Utilities", tab_id="utilities"),
             ],
             id="tabs",
             active_tab="analysis",
@@ -114,7 +114,7 @@ app.layout = dbc.Container(
 )
 
 
-def render_utility_tab(session_data):
+def render_utilities_tab(session_data):
     return dbc.Card(
         [
             dbc.CardBody(
@@ -170,6 +170,7 @@ def render_utility_tab(session_data):
     )
 
 
+# Update the render_tab_content function to include the Utilities tab
 @app.callback(
     Output("tab-content", "children"),
     Input("tabs", "active_tab"),
@@ -182,8 +183,47 @@ def render_tab_content(active_tab, session_data):
         return html.P("Stock Screening tab content (to be implemented)")
     elif active_tab == "backtesting":
         return html.P("Backtesting tab content (to be implemented)")
-    elif active_tab == "utility":
-        return render_utility_tab(session_data)
+    elif active_tab == "utilities":
+        return render_utilities_tab(session_data)
+
+
+# Add a new callback for the download button and progress updates
+@app.callback(
+    Output("download-status", "children"),
+    Output("download-progress-interval", "disabled"),
+    Input("download-button", "n_clicks"),
+    Input("download-progress-interval", "n_intervals"),
+    State("override-date-range", "start_date"),
+    State("override-date-range", "end_date"),
+    prevent_initial_call=True,
+)
+def update_stock_data(n_clicks, n_intervals, start_date, end_date):
+    ctx = dash.callback_context
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    if trigger_id == "download-button" and n_clicks:
+        # Start the download process in a separate thread
+        threading.Thread(
+            target=data_fetcher.update_all_stocks,
+            args=(TSX_SYMBOLS, start_date, end_date),
+        ).start()
+        return [
+            dbc.Progress(value=0, id="download-progress"),
+            html.Div(id="download-message", children="Initializing..."),
+        ], False
+
+    if trigger_id == "download-progress-interval":
+        # Update the progress bar and message
+        progress, message = data_fetcher.get_update_progress()
+        if progress < 100:
+            return [
+                dbc.Progress(value=progress, id="download-progress"),
+                html.Div(id="download-message", children=message),
+            ], False
+        else:
+            return f"Download complete: {message}", True
+
+    return dash.no_update, dash.no_update
 
 
 def render_analysis_tab(session_data):
@@ -351,44 +391,6 @@ def update_graph(selected_stock, start_date, end_date):
     )
 
     return fig
-
-
-@app.callback(
-    Output("download-status", "children"),
-    Output("download-progress-interval", "disabled"),
-    Input("download-button", "n_clicks"),
-    Input("download-progress-interval", "n_intervals"),
-    State("override-date-range", "start_date"),
-    State("override-date-range", "end_date"),
-    prevent_initial_call=True,
-)
-def update_stock_data(n_clicks, n_intervals, start_date, end_date):
-    ctx = dash.callback_context
-    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-
-    if trigger_id == "download-button" and n_clicks:
-        # Start the download process in a separate thread
-        threading.Thread(
-            target=data_fetcher.update_all_stocks,
-            args=(TSX_SYMBOLS, start_date, end_date),
-        ).start()
-        return [
-            dbc.Progress(value=0, id="download-progress"),
-            html.Div(id="download-message", children="Initializing..."),
-        ], False
-
-    if trigger_id == "download-progress-interval":
-        # Update the progress bar and message
-        progress, message = data_fetcher.get_update_progress()
-        if progress < 100:
-            return [
-                dbc.Progress(value=progress, id="download-progress"),
-                html.Div(id="download-message", children=message),
-            ], False
-        else:
-            return f"Download complete: {message}", True
-
-    return dash.no_update, dash.no_update
 
 
 if __name__ == "__main__":
