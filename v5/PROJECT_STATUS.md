@@ -17,6 +17,10 @@
 - Add a Utility tab for overriding the start date / end date and a button to manually tigger downloading stock data.
 
 ## Next Steps
+split out indicator updating from stock pulling. I'd rather just take the hit on calculating them all or work on date range support that kind of thing - rather than doing on each pull down. Found holes in db doing it that way
+
+Then need to keep debugging gold cross screener. 
+
 - [ ] Implement config-driven development for screening criteria, and backtesting strategies
 - [ ] Create separate components for each major feature (e.g., StockChart, IndicatorPanel, Screener)
 - [ ] Implement lazy loading for tab content using callbacks

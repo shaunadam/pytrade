@@ -7,6 +7,7 @@ import pandas as pd
 import yfinance as yf
 import logging
 import traceback
+from typing import List, Dict
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class DataFetcher:
             return pd.DataFrame()
 
     def calculate_indicators(self, data):
-        indicators = {}
+        indicators = pd.DataFrame(index=data.index)
         indicators["SMA12"] = sma(data, 12)
         indicators["SMA26"] = sma(data, 26)
         indicators["SMA50"] = sma(data, 50)
@@ -45,7 +46,13 @@ class DataFetcher:
         indicators["RSI"] = rsi(data)
         macd_data = macd(data)
         indicators["MACD"] = macd_data["MACD"]
-        return pd.DataFrame(indicators)
+        indicators["MACD_Signal"] = macd_data["Signal"]
+        indicators["MACD_Histogram"] = macd_data["Histogram"]
+
+        # Drop rows where all indicator values are NaN
+        indicators = indicators.dropna(how="all")
+
+        return indicators
 
     def set_update_progress(self, progress, message=""):
         self.update_progress = progress
@@ -230,3 +237,127 @@ class DataFetcher:
         df = df.join(indicator_df)
 
         return df
+
+    def get_data_for_multiple_stocks(
+        self, symbols: List[str], start_date: str, end_date: str
+    ) -> Dict[str, pd.DataFrame]:
+        session = self.Session()
+        try:
+            data = {}
+            for symbol in symbols:
+                stock = session.query(Stock).filter_by(symbol=symbol).first()
+                if not stock:
+                    continue
+
+                daily_data = (
+                    session.query(DailyData)
+                    .filter(
+                        DailyData.stock_id == stock.id,
+                        DailyData.date >= start_date,
+                        DailyData.date <= end_date,
+                    )
+                    .all()
+                )
+
+                indicators = (
+                    session.query(TechnicalIndicator)
+                    .filter(
+                        TechnicalIndicator.stock_id == stock.id,
+                        TechnicalIndicator.date >= start_date,
+                        TechnicalIndicator.date <= end_date,
+                    )
+                    .all()
+                )
+
+                if not daily_data:
+                    continue
+
+                df = pd.DataFrame([d.__dict__ for d in daily_data])
+                df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
+                df.set_index("date", inplace=True)
+                df.index = pd.to_datetime(df.index)
+
+                indicator_data = [
+                    (ind.date, ind.indicator_name, ind.value) for ind in indicators
+                ]
+                indicator_df = pd.DataFrame(
+                    indicator_data, columns=["date", "indicator_name", "value"]
+                )
+                indicator_df["date"] = pd.to_datetime(indicator_df["date"])
+                indicator_df = indicator_df.pivot(
+                    index="date", columns="indicator_name", values="value"
+                )
+
+                df = df.join(indicator_df)
+                data[symbol] = df
+
+            return data
+        finally:
+            session.close()
+
+    def recalculate_indicators(self, symbols, start_date, end_date):
+        self.set_update_progress(0, "Recalculating indicators for all stocks...")
+        session = self.Session()
+        try:
+            for i, symbol in enumerate(symbols):
+                stock = session.query(Stock).filter_by(symbol=symbol).first()
+                if not stock:
+                    logger.warning(f"Stock {symbol} not found in database. Skipping.")
+                    continue
+
+                daily_data = (
+                    session.query(DailyData)
+                    .filter(
+                        DailyData.stock_id == stock.id,
+                        DailyData.date >= start_date,
+                        DailyData.date <= end_date,
+                    )
+                    .all()
+                )
+
+                if not daily_data:
+                    logger.warning(f"No data found for {symbol}. Skipping.")
+                    continue
+
+                df = pd.DataFrame([d.__dict__ for d in daily_data])
+                df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
+                df.set_index("date", inplace=True)
+                df.index = pd.to_datetime(df.index)
+
+                indicators = self.calculate_indicators(df["close"])
+
+                # Delete existing indicators for this stock and date range
+                session.query(TechnicalIndicator).filter(
+                    TechnicalIndicator.stock_id == stock.id,
+                    TechnicalIndicator.date >= start_date,
+                    TechnicalIndicator.date <= end_date,
+                ).delete()
+
+                # Insert new indicators
+                for date, row in indicators.iterrows():
+                    for indicator_name, value in row.items():
+                        if pd.notna(value):  # Only insert non-NaN values
+                            indicator = TechnicalIndicator(
+                                stock_id=stock.id,
+                                date=date.date(),
+                                indicator_name=indicator_name,
+                                value=float(value),  # Ensure the value is a float
+                            )
+                            session.add(indicator)
+
+                stock.last_updated = datetime.now().date()
+                session.commit()
+
+                progress = int((i + 1) / len(symbols) * 100)
+                self.set_update_progress(
+                    progress, f"Recalculated indicators for {i+1}/{len(symbols)} stocks"
+                )
+
+            self.set_update_progress(100, "All indicators recalculated successfully")
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error recalculating indicators: {str(e)}")
+            logger.error(traceback.format_exc())
+            self.set_update_progress(100, f"Error recalculating indicators: {str(e)}")
+        finally:
+            session.close()
