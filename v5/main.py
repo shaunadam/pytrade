@@ -13,10 +13,12 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
     fetcher = DataFetcher(DB_PATH)
     if symbols:
         fetcher.update_all_stocks(symbols, start_date, end_date)
+        fetcher.update_indicators(symbols, start_date, end_date)
     else:
         try:
             print(f"Updating data for all TSX symbols")
             fetcher.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
+            fetcher.update_indicators(TSX_SYMBOLS, start_date, end_date)
         except Exception as e:
             print(f"Error updating stocks: {str(e)}")
 
@@ -33,45 +35,6 @@ def recalculate_indicators(
             fetcher.recalculate_indicators(TSX_SYMBOLS, start_date, end_date)
         except Exception as e:
             print(f"Error recalculating indicators: {str(e)}")
-
-
-def test_indicators():
-    fetcher = DataFetcher(DB_PATH)
-    # Use the first valid symbol for testing
-    for symbol in TSX_SYMBOLS:
-        try:
-            data = fetcher.get_stock_data_with_indicators(symbol, START_DATE, END_DATE)
-            if data is not None and not data.empty:
-                break
-        except Exception:
-            continue
-    else:
-        print("No valid symbols found for testing")
-        return
-
-    if data is not None:
-        print(f"Data for {symbol}:")
-        print(data.head())
-        indicators = [
-            "SMA",
-            "EMA",
-            "RSI",
-            "MACD",
-            "MACD_Signal",
-            "MACD_Histogram",
-            "BB_SMA",
-            "BB_Upper",
-            "BB_Lower",
-        ]
-        missing_indicators = [ind for ind in indicators if ind not in data.columns]
-        if not missing_indicators:
-            print("All indicators are present in the data.")
-        else:
-            print(f"Missing indicators: {', '.join(missing_indicators)}")
-        print("\nData statistics:")
-        print(data.describe())
-    else:
-        print(f"No data found for {symbol}")
 
 
 def run_dashboard():
@@ -91,7 +54,7 @@ def run_screener(config_name):
     print(results.to_string(index=False))
 
 
-run_screener("gold_cross")
+# run_screener("gold_cross")
 
 
 if __name__ == "__main__":
@@ -111,8 +74,6 @@ if __name__ == "__main__":
         update_data()
     if args.recalculate:
         recalculate_indicators()
-    if args.test:
-        test_indicators()
     if args.dashboard:
         run_dashboard()
     if args.screener:

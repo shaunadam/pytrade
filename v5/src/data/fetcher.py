@@ -35,33 +35,10 @@ class DataFetcher:
             logger.error(traceback.format_exc())
             return pd.DataFrame()
 
-    def calculate_indicators(self, data):
-        indicators = pd.DataFrame(index=data.index)
-        indicators["SMA12"] = sma(data, 12)
-        indicators["SMA26"] = sma(data, 26)
-        indicators["SMA50"] = sma(data, 50)
-        indicators["EMA12"] = ema(data, 12)
-        indicators["EMA26"] = ema(data, 26)
-        indicators["EMA50"] = ema(data, 50)
-        indicators["RSI"] = rsi(data)
-        macd_data = macd(data)
-        indicators["MACD"] = macd_data["MACD"]
-        indicators["MACD_Signal"] = macd_data["Signal"]
-        indicators["MACD_Histogram"] = macd_data["Histogram"]
-
-        # Drop rows where all indicator values are NaN
-        indicators = indicators.dropna(how="all")
-
-        return indicators
-
-    def set_update_progress(self, progress, message=""):
-        self.update_progress = progress
-        self.update_message = message
-
-    def get_update_progress(self):
-        return self.update_progress, self.update_message
-
     def update_all_stocks(self, symbols, start_date, end_date):
+        """
+        Fetches and updates daily stock data only.
+        """
         self.set_update_progress(0, "Fetching data for all stocks...")
         all_data = self.fetch_stock_data(symbols, start_date, end_date)
 
@@ -74,7 +51,6 @@ class DataFetcher:
         session = self.Session()
         try:
             all_daily_data = []
-            all_indicator_data = []
 
             for i, symbol in enumerate(symbols):
                 symbol_data = all_data[symbol] if len(symbols) > 1 else all_data
@@ -89,8 +65,6 @@ class DataFetcher:
                     stock = Stock(symbol=symbol, name=symbol)
                     session.add(stock)
                     session.flush()
-
-                indicators = self.calculate_indicators(symbol_data["Close"])
 
                 daily_data = symbol_data.reset_index()
                 daily_data["stock_id"] = stock.id
@@ -107,18 +81,7 @@ class DataFetcher:
                 daily_data = daily_data.drop(columns=["Adj Close"])
                 daily_data = daily_data.dropna()
 
-                indicator_data = indicators.reset_index()
-                indicator_data["stock_id"] = stock.id
-                indicator_data = indicator_data.melt(
-                    id_vars=["Date", "stock_id"],
-                    var_name="indicator_name",
-                    value_name="value",
-                )
-                indicator_data = indicator_data.rename(columns={"Date": "date"})
-                indicator_data = indicator_data.dropna()
-
                 all_daily_data.append(daily_data)
-                all_indicator_data.append(indicator_data)
 
                 stock.last_updated = datetime.now().date()
                 session.commit()
@@ -130,10 +93,9 @@ class DataFetcher:
 
             # Concatenate all data
             combined_daily_data = pd.concat(all_daily_data, ignore_index=True)
-            combined_indicator_data = pd.concat(all_indicator_data, ignore_index=True)
 
             # Bulk upsert all data
-            self.bulk_upsert_data(session, combined_daily_data, combined_indicator_data)
+            self.bulk_upsert_daily_data(session, combined_daily_data)
 
             self.set_update_progress(100, "All stocks updated successfully")
         except Exception as e:
@@ -144,158 +106,10 @@ class DataFetcher:
         finally:
             session.close()
 
-    def bulk_upsert_data(self, session, daily_data_df, indicator_data_df):
-        try:
-            # Upsert daily data
-            daily_data_df["date"] = pd.to_datetime(daily_data_df["date"]).dt.date
-            daily_data_records = daily_data_df.to_dict("records")
-            upsert_daily_stmt = text(
-                """
-                INSERT OR REPLACE INTO daily_data (stock_id, date, open, high, low, close, volume)
-                VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
-            """
-            )
-            session.execute(upsert_daily_stmt, daily_data_records)
-
-            # Upsert indicator data
-            indicator_data_df["date"] = pd.to_datetime(
-                indicator_data_df["date"]
-            ).dt.date
-            indicator_data_records = indicator_data_df.to_dict("records")
-            upsert_indicator_stmt = text(
-                """
-                INSERT OR REPLACE INTO technical_indicators (stock_id, date, indicator_name, value)
-                VALUES (:stock_id, :date, :indicator_name, :value)
-            """
-            )
-            session.execute(upsert_indicator_stmt, indicator_data_records)
-
-            session.commit()
-            logger.info(
-                f"Successfully upserted {len(daily_data_records)} daily data records and {len(indicator_data_records)} indicator data records"
-            )
-        except Exception as e:
-            session.rollback()
-            logger.error(f"Error in bulk_upsert_data: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
-
-    def get_stock_data_with_indicators(self, symbol, start_date, end_date):
-        session = self.Session()
-        stock = session.query(Stock).filter_by(symbol=symbol).first()
-
-        if not stock:
-            session.close()
-            return None
-
-        daily_data = (
-            session.query(DailyData)
-            .filter(
-                DailyData.stock_id == stock.id,
-                DailyData.date >= start_date,
-                DailyData.date <= end_date,
-            )
-            .all()
-        )
-
-        indicators = (
-            session.query(TechnicalIndicator)
-            .filter(
-                TechnicalIndicator.stock_id == stock.id,
-                TechnicalIndicator.date >= start_date,
-                TechnicalIndicator.date <= end_date,
-            )
-            .all()
-        )
-
-        session.close()
-
-        if not daily_data:
-            return None
-
-        # Create DataFrame from daily data
-        df = pd.DataFrame([d.__dict__ for d in daily_data])
-        df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
-        df.set_index("date", inplace=True)
-        df.index = pd.to_datetime(df.index)
-
-        # Create DataFrame from indicators
-        indicator_data = [
-            (ind.date, ind.indicator_name, ind.value) for ind in indicators
-        ]
-        indicator_df = pd.DataFrame(
-            indicator_data, columns=["date", "indicator_name", "value"]
-        )
-        indicator_df["date"] = pd.to_datetime(indicator_df["date"])
-
-        # Pivot the indicator DataFrame
-        indicator_df = indicator_df.pivot(
-            index="date", columns="indicator_name", values="value"
-        )
-
-        # Merge daily data with indicator data
-        df = df.join(indicator_df)
-
-        return df
-
-    def get_data_for_multiple_stocks(
-        self, symbols: List[str], start_date: str, end_date: str
-    ) -> Dict[str, pd.DataFrame]:
-        session = self.Session()
-        try:
-            data = {}
-            for symbol in symbols:
-                stock = session.query(Stock).filter_by(symbol=symbol).first()
-                if not stock:
-                    continue
-
-                daily_data = (
-                    session.query(DailyData)
-                    .filter(
-                        DailyData.stock_id == stock.id,
-                        DailyData.date >= start_date,
-                        DailyData.date <= end_date,
-                    )
-                    .all()
-                )
-
-                indicators = (
-                    session.query(TechnicalIndicator)
-                    .filter(
-                        TechnicalIndicator.stock_id == stock.id,
-                        TechnicalIndicator.date >= start_date,
-                        TechnicalIndicator.date <= end_date,
-                    )
-                    .all()
-                )
-
-                if not daily_data:
-                    continue
-
-                df = pd.DataFrame([d.__dict__ for d in daily_data])
-                df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
-                df.set_index("date", inplace=True)
-                df.index = pd.to_datetime(df.index)
-
-                indicator_data = [
-                    (ind.date, ind.indicator_name, ind.value) for ind in indicators
-                ]
-                indicator_df = pd.DataFrame(
-                    indicator_data, columns=["date", "indicator_name", "value"]
-                )
-                indicator_df["date"] = pd.to_datetime(indicator_df["date"])
-                indicator_df = indicator_df.pivot(
-                    index="date", columns="indicator_name", values="value"
-                )
-
-                df = df.join(indicator_df)
-                data[symbol] = df
-
-            return data
-        finally:
-            session.close()
-
-    def recalculate_indicators(self, symbols, start_date, end_date):
+    def update_indicators(self, symbols, start_date, end_date):
+        """
+        Recalculates and updates indicator data separately.
+        """
         self.set_update_progress(0, "Recalculating indicators for all stocks...")
         session = self.Session()
         try:
@@ -361,3 +175,54 @@ class DataFetcher:
             self.set_update_progress(100, f"Error recalculating indicators: {str(e)}")
         finally:
             session.close()
+
+    def bulk_upsert_daily_data(self, session, daily_data_df):
+        try:
+            # Upsert daily data
+            daily_data_df["date"] = pd.to_datetime(daily_data_df["date"]).dt.date
+            daily_data_records = daily_data_df.to_dict("records")
+            upsert_daily_stmt = text(
+                """
+                INSERT OR REPLACE INTO daily_data (stock_id, date, open, high, low, close, volume)
+                VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
+            """
+            )
+            session.execute(upsert_daily_stmt, daily_data_records)
+            session.commit()
+            logger.info(
+                f"Successfully upserted {len(daily_data_records)} daily data records"
+            )
+        except Exception as e:
+            session.rollback()
+            logger.error(f"Error in bulk_upsert_daily_data: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+
+    def calculate_indicators(self, data):
+        """
+        Calculate technical indicators.
+        """
+        indicators = pd.DataFrame(index=data.index)
+        indicators["SMA12"] = sma(data, 12)
+        indicators["SMA26"] = sma(data, 26)
+        indicators["SMA50"] = sma(data, 50)
+        indicators["EMA12"] = ema(data, 12)
+        indicators["EMA26"] = ema(data, 26)
+        indicators["EMA50"] = ema(data, 50)
+        indicators["RSI"] = rsi(data)
+        macd_data = macd(data)
+        indicators["MACD"] = macd_data["MACD"]
+        indicators["MACD_Signal"] = macd_data["Signal"]
+        indicators["MACD_Histogram"] = macd_data["Histogram"]
+
+        # Drop rows where all indicator values are NaN
+        indicators = indicators.dropna(how="all")
+
+        return indicators
+
+    def set_update_progress(self, progress, message=""):
+        self.update_progress = progress
+        self.update_message = message
+
+    def get_update_progress(self):
+        return self.update_progress, self.update_message
