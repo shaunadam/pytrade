@@ -111,7 +111,27 @@ def render_screening_tab():
                         selected_rows=[],
                     ),
                     html.H5("Stock Details"),
-                    dcc.Graph(id="screening-stock-graph"),
+                    # New Graph Components
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dcc.Graph(id="screening-price-indicators-graph"),
+                                md=12,
+                                lg=12,
+                            ),
+                            dbc.Col(
+                                dcc.Graph(id="screening-volume-graph"), md=12, lg=12
+                            ),
+                        ],
+                        className="mb-4",
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(dcc.Graph(id="screening-macd-graph"), md=12, lg=12),
+                            dbc.Col(dcc.Graph(id="screening-rsi-graph"), md=12, lg=12),
+                        ],
+                        className="mb-4",
+                    ),
                 ]
             )
         ]
