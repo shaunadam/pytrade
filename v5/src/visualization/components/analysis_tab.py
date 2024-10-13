@@ -53,6 +53,11 @@ def render_analysis_tab(session_data):
                                             "selected_stock", TSX_SYMBOLS[0]
                                         ),
                                         className="mb-3",
+                                        style={
+                                            "backgroundColor": "#343a40",
+                                            "color": "white",
+                                            "border": "1px solid #495057",
+                                        },
                                     ),
                                 ],
                                 width=6,
@@ -86,13 +91,33 @@ def render_analysis_tab(session_data):
                                             "end_date", end_date.isoformat()
                                         ),
                                         className="mb-3",
+                                        style={
+                                            "backgroundColor": "#343a40",
+                                            "color": "white",
+                                        },
                                     ),
                                 ],
                                 width=6,
                             ),
                         ]
                     ),
-                    dcc.Graph(id="stock-graph"),
+                    # Arrange graphs in a responsive grid
+                    dbc.Row(
+                        [
+                            dbc.Col(
+                                dcc.Graph(id="price-indicators-graph"), md=12, lg=6
+                            ),
+                            dbc.Col(dcc.Graph(id="volume-graph"), md=12, lg=6),
+                        ],
+                        className="mb-4",
+                    ),
+                    dbc.Row(
+                        [
+                            dbc.Col(dcc.Graph(id="macd-graph"), md=12, lg=6),
+                            dbc.Col(dcc.Graph(id="rsi-graph"), md=12, lg=6),
+                        ],
+                        className="mb-4",
+                    ),
                     dcc.Loading(
                         id="loading",
                         type="default",

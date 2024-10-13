@@ -2,6 +2,9 @@
 
 import os
 import yaml
+import dash
+from dash import dcc, html, dash_table
+import dash_bootstrap_components as dbc
 from config import DB_PATH, TSX_SYMBOLS, START_DATE
 from src.analysis.screener import Screener
 from src.data.fetcher import DataService
@@ -35,6 +38,11 @@ def render_screening_tab():
                                         multi=True,
                                         placeholder="Select one or more screeners",
                                         className="mb-3",
+                                        style={
+                                            "backgroundColor": "#343a40",
+                                            "color": "white",
+                                            "border": "1px solid #495057",
+                                        },
                                     ),
                                 ],
                                 width=6,
@@ -51,6 +59,11 @@ def render_screening_tab():
                                         multi=True,
                                         placeholder="Select stocks or leave empty for all",
                                         className="mb-3",
+                                        style={
+                                            "backgroundColor": "#343a40",
+                                            "color": "white",
+                                            "border": "1px solid #495057",
+                                        },
                                     ),
                                 ],
                                 width=6,
@@ -68,7 +81,6 @@ def render_screening_tab():
                         size="lg",
                         color="primary",
                         fullscreen=False,
-                        className="mb-3",
                     ),
                     html.H5("Screening Results"),
                     dash_table.DataTable(

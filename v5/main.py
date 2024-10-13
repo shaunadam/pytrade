@@ -103,7 +103,7 @@ def run_screener(config_name):
 
 
 # Uncomment the following line to run the screener directly
-run_screener("gold_cross")
+# run_screener("gold_cross")
 
 
 if __name__ == "__main__":

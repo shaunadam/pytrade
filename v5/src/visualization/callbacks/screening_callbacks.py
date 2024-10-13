@@ -10,6 +10,7 @@ import pandas as pd
 import dash
 import plotly.graph_objs as go
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -42,10 +43,11 @@ def register_screening_callbacks(app):
                     config_path=os.path.join(
                         os.path.dirname(__file__),
                         "../../analysis",
-                        f"{screener_name}.yaml",
+                        screener_name,
                     ),
                     data_fetcher=data_service,
                 )
+
                 screener_results = screener.screen(symbols, START_DATE, END_DATE)
                 for _, row in screener_results.iterrows():
                     results.append({"symbol": row["symbol"], "screener": screener_name})

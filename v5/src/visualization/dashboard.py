@@ -29,7 +29,7 @@ app = dash.Dash(
 # Layout of the dashboard
 app.layout = dbc.Container(
     [
-        html.H1("TSX Swing Trading Dashboard", className="my-4"),
+        html.H1("TSX Swing Trading Dashboard", className="my-4 text-center"),
         dcc.Store(
             id="session",
             data={
