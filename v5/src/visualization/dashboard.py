@@ -3,11 +3,16 @@ from dash import dcc, html
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 import pandas as pd
-from src.data.fetcher import DataFetcher
+from src.data.fetcher import DataService  # Updated import
 from config import DB_PATH, TSX_SYMBOLS, START_DATE
 import dash_bootstrap_components as dbc
 from datetime import datetime, timedelta
 import threading
+import logging
+
+# Configure logging to capture debug messages from the refactored classes
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the Dash app with a dark Bootstrap theme
 app = dash.Dash(
@@ -69,8 +74,8 @@ app.index_string = """
 </html>
 """
 
-# Initialize the DataFetcher
-data_fetcher = DataFetcher(DB_PATH)
+# Initialize the DataService
+data_service = DataService(DB_PATH)  # Updated initialization
 
 # Calculate date range
 end_date = datetime.now().date()
@@ -173,8 +178,7 @@ def render_utilities_tab(session_data):
 # Update the render_tab_content function to include the Utilities tab
 @app.callback(
     Output("tab-content", "children"),
-    Input("tabs", "active_tab"),
-    Input("session", "data"),
+    [Input("tabs", "active_tab"), Input("session", "data")],
 )
 def render_tab_content(active_tab, session_data):
     if active_tab == "analysis":
@@ -185,16 +189,24 @@ def render_tab_content(active_tab, session_data):
         return html.P("Backtesting tab content (to be implemented)")
     elif active_tab == "utilities":
         return render_utilities_tab(session_data)
+    else:
+        return html.P("Tab not found")
 
 
 # Add a new callback for the download button and progress updates
 @app.callback(
-    Output("download-status", "children"),
-    Output("download-progress-interval", "disabled"),
-    Input("download-button", "n_clicks"),
-    Input("download-progress-interval", "n_intervals"),
-    State("override-date-range", "start_date"),
-    State("override-date-range", "end_date"),
+    [
+        Output("download-status", "children"),
+        Output("download-progress-interval", "disabled"),
+    ],
+    [
+        Input("download-button", "n_clicks"),
+        Input("download-progress-interval", "n_intervals"),
+    ],
+    [
+        State("override-date-range", "start_date"),
+        State("override-date-range", "end_date"),
+    ],
     prevent_initial_call=True,
 )
 def update_stock_data(n_clicks, n_intervals, start_date, end_date):
@@ -204,9 +216,13 @@ def update_stock_data(n_clicks, n_intervals, start_date, end_date):
     if trigger_id == "download-button" and n_clicks:
         # Start the download process in a separate thread
         threading.Thread(
-            target=data_fetcher.update_all_stocks,
-            args=(TSX_SYMBOLS, start_date, end_date),
+            target=lambda: (
+                data_service.update_all_stocks(TSX_SYMBOLS, start_date, end_date),
+                data_service.update_indicators(TSX_SYMBOLS, start_date, end_date),
+            ),
+            daemon=True,  # Ensure thread exits when main program does
         ).start()
+        logger.info("Started updating stock data in a separate thread.")
         return [
             dbc.Progress(value=0, id="download-progress"),
             html.Div(id="download-message", children="Initializing..."),
@@ -214,10 +230,13 @@ def update_stock_data(n_clicks, n_intervals, start_date, end_date):
 
     if trigger_id == "download-progress-interval":
         # Update the progress bar and message
-        progress, message = data_fetcher.get_update_progress()
+        progress, message = data_service.progress_tracker.get_progress()
+        logger.info(f"Progress: {progress}%, Message: {message}")
         if progress < 100:
             return [
-                dbc.Progress(value=progress, id="download-progress"),
+                dbc.Progress(
+                    value=progress, id="download-progress", striped=True, animated=True
+                ),
                 html.Div(id="download-message", children=message),
             ], False
         else:
@@ -286,11 +305,12 @@ def render_analysis_tab(session_data):
 
 
 @app.callback(
-    Output("date-range", "start_date"),
-    Output("date-range", "end_date"),
+    [
+        Output("date-range", "start_date"),
+        Output("date-range", "end_date"),
+    ],
     [Input(f"range-{range_name}", "n_clicks") for range_name in date_ranges.keys()],
-    State("date-range", "start_date"),
-    State("date-range", "end_date"),
+    [State("date-range", "start_date"), State("date-range", "end_date")],
 )
 def update_date_range(*args):
     ctx = dash.callback_context
@@ -313,20 +333,26 @@ def update_date_range(*args):
 
 @app.callback(
     Output("stock-graph", "figure"),
-    Input("stock-selector", "value"),
-    Input("date-range", "start_date"),
-    Input("date-range", "end_date"),
+    [
+        Input("stock-selector", "value"),
+        Input("date-range", "start_date"),
+        Input("date-range", "end_date"),
+    ],
 )
 def update_graph(selected_stock, start_date, end_date):
     if not selected_stock or not start_date or not end_date:
         # Return empty figure if inputs are not ready
         return go.Figure()
 
-    start_date = pd.to_datetime(start_date).date()
-    end_date = pd.to_datetime(end_date).date()
+    start_date_dt = pd.to_datetime(start_date).date()
+    end_date_dt = pd.to_datetime(end_date).date()
 
-    df = data_fetcher.get_stock_data_with_indicators(
-        selected_stock, start_date, end_date
+    logger.info(
+        f"Fetching data for {selected_stock} from {start_date_dt} to {end_date_dt}"
+    )
+
+    df = data_service.get_stock_data_with_indicators(
+        selected_stock, start_date_dt.isoformat(), end_date_dt.isoformat()
     )
 
     if df is None or df.empty:
@@ -349,7 +375,7 @@ def update_graph(selected_stock, start_date, end_date):
         return fig
 
     candlestick = go.Candlestick(
-        x=df.index,
+        x=df["date"],
         open=df["open"],
         high=df["high"],
         low=df["low"],
@@ -362,7 +388,7 @@ def update_graph(selected_stock, start_date, end_date):
     # Add SMA and EMA traces if available
     if "SMA50" in df.columns:
         sma_trace = go.Scatter(
-            x=df.index,
+            x=df["date"],
             y=df["SMA50"],
             mode="lines",
             name="SMA50",
@@ -372,7 +398,7 @@ def update_graph(selected_stock, start_date, end_date):
 
     if "EMA50" in df.columns:
         ema_trace = go.Scatter(
-            x=df.index,
+            x=df["date"],
             y=df["EMA50"],
             mode="lines",
             name="EMA50",
@@ -393,16 +419,14 @@ def update_graph(selected_stock, start_date, end_date):
     return fig
 
 
-if __name__ == "__main__":
-    app.run_server(debug=True)
-
-
 @app.callback(
     Output("session", "data"),
-    Input("stock-selector", "value"),
-    Input("date-range", "start_date"),
-    Input("date-range", "end_date"),
-    State("session", "data"),
+    [
+        Input("stock-selector", "value"),
+        Input("date-range", "start_date"),
+        Input("date-range", "end_date"),
+    ],
+    [State("session", "data")],
 )
 def update_session(selected_stock, start_date, end_date, session_data):
     if selected_stock and start_date and end_date:

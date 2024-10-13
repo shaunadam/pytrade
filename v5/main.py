@@ -1,59 +1,108 @@
-from src.data.fetcher import DataFetcher
+from src.data.fetcher import DataService  # Updated import
 from src.visualization.dashboard import app as dashboard_app
 from src.analysis.screener import Screener
 from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
 import pandas as pd
 import argparse
-import yfinance as yf
-import yaml
-import os
+import logging
+
+# Configure logging to capture debug messages from the refactored classes
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
-    fetcher = DataFetcher(DB_PATH)
+    """
+    Updates stock data and recalculates technical indicators.
+
+    Args:
+        symbols (list, optional): List of stock symbols to update. Defaults to None.
+        start_date (str, optional): Start date for fetching data. Defaults to START_DATE.
+        end_date (str, optional): End date for fetching data. Defaults to END_DATE.
+    """
+    data_service = DataService(DB_PATH)  # Instantiate DataService
     if symbols:
-        fetcher.update_all_stocks(symbols, start_date, end_date)
-        fetcher.update_indicators(symbols, start_date, end_date)
+        try:
+            logger.info(f"Updating data for symbols: {symbols}")
+            data_service.update_all_stocks(symbols, start_date, end_date)
+            data_service.update_indicators(symbols, start_date, end_date)
+            logger.info(
+                "Data update and indicator recalculation completed successfully."
+            )
+        except Exception as e:
+            logger.error(f"Error updating stocks: {str(e)}")
     else:
         try:
-            print(f"Updating data for all TSX symbols")
-            fetcher.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
-            fetcher.update_indicators(TSX_SYMBOLS, start_date, end_date)
+            logger.info("Updating data for all TSX symbols.")
+            data_service.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
+            data_service.update_indicators(TSX_SYMBOLS, start_date, end_date)
+            logger.info(
+                "Data update and indicator recalculation for all TSX symbols completed successfully."
+            )
         except Exception as e:
-            print(f"Error updating stocks: {str(e)}")
+            logger.error(f"Error updating stocks: {str(e)}")
 
 
 def recalculate_indicators(
     symbols: list = None, start_date=START_DATE, end_date=END_DATE
 ):
-    fetcher = DataFetcher(DB_PATH)
+    """
+    Recalculates technical indicators for specified symbols.
+
+    Args:
+        symbols (list, optional): List of stock symbols. Defaults to None.
+        start_date (str, optional): Start date for recalculating indicators. Defaults to START_DATE.
+        end_date (str, optional): End date for recalculating indicators. Defaults to END_DATE.
+    """
+    data_service = DataService(DB_PATH)  # Instantiate DataService
     if symbols:
-        fetcher.update_indicators(symbols, start_date, end_date)
+        try:
+            logger.info(f"Recalculating indicators for symbols: {symbols}")
+            data_service.update_indicators(symbols, start_date, end_date)
+            logger.info("Indicator recalculation completed successfully.")
+        except Exception as e:
+            logger.error(f"Error recalculating indicators: {str(e)}")
     else:
         try:
-            print(f"Recalculating indicators for all TSX symbols")
-            fetcher.update_indicators(TSX_SYMBOLS, start_date, end_date)
+            logger.info("Recalculating indicators for all TSX symbols.")
+            data_service.update_indicators(TSX_SYMBOLS, start_date, end_date)
+            logger.info(
+                "Indicator recalculation for all TSX symbols completed successfully."
+            )
         except Exception as e:
-            print(f"Error recalculating indicators: {str(e)}")
+            logger.error(f"Error recalculating indicators: {str(e)}")
 
 
 def run_dashboard():
+    """
+    Runs the visualization dashboard.
+    """
+    logger.info("Starting the dashboard server.")
     dashboard_app.run_server(debug=True)
 
 
 def run_screener(config_name):
-    fetcher = DataFetcher(DB_PATH)
-    screener = Screener(config_name, fetcher)
+    """
+    Runs the screener with the specified configuration.
 
-    print(f"Running screener: {screener.config['name']}")
-    print(f"Description: {screener.config['description']}")
+    Args:
+        config_name (str): Path to the screener configuration file.
+    """
+    data_service = DataService(DB_PATH)  # Instantiate DataService
+    screener = Screener(config_name, data_service)  # Pass DataService instance
 
-    results = screener.screen(TSX_SYMBOLS, START_DATE, END_DATE)
+    logger.info(f"Running screener: {screener.config['name']}")
+    logger.info(f"Description: {screener.config['description']}")
 
-    print("\nScreening Results:")
-    print(results.to_string(index=False))
+    try:
+        results = screener.screen(TSX_SYMBOLS, START_DATE, END_DATE)
+        logger.info("\nScreening Results:")
+        print(results.to_string(index=False))
+    except Exception as e:
+        logger.error(f"Error running screener '{config_name}': {str(e)}")
 
 
+# Uncomment the following line to run the screener directly
 # run_screener("gold_cross")
 
 

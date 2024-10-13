@@ -2,12 +2,12 @@ import yaml
 from typing import List, Dict, Any
 import pandas as pd
 import numpy as np
-from src.data.fetcher import DataFetcher
+from src.data.fetcher import StockDataFetcher
 import os
 
 
 class Screener:
-    def __init__(self, config_path: str, data_fetcher: DataFetcher):
+    def __init__(self, config_path: str, data_fetcher: StockDataFetcher):
         self.config = self.load_config(config_path)
         self.data_fetcher = data_fetcher
 
