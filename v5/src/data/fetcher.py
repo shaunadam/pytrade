@@ -2,12 +2,12 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker
 from src.database.init_db import Stock, DailyData, TechnicalIndicator
 from src.analysis.indicators import sma, ema, rsi, macd
-from datetime import datetime
+import datetime
 import pandas as pd
 import yfinance as yf
 import logging
 import traceback
-from typing import List, Dict
+from typing import List, Dict, Union
 
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
@@ -106,10 +106,10 @@ class DataFetcher:
         finally:
             session.close()
 
-    def update_indicators(self, symbols, start_date, end_date):
-        """
-        Recalculates and updates indicator data separately.
-        """
+    def update_indicators(self, symbols, start_date, end_date, buffer_days=365):
+        start_date_with_buffer = (
+            pd.to_datetime(start_date) - datetime.timedelta(days=buffer_days)
+        ).strftime("%Y-%m-%d")
         self.set_update_progress(0, "Recalculating indicators for all stocks...")
         session = self.Session()
         try:
@@ -123,7 +123,7 @@ class DataFetcher:
                     session.query(DailyData)
                     .filter(
                         DailyData.stock_id == stock.id,
-                        DailyData.date >= start_date,
+                        DailyData.date >= start_date_with_buffer,
                         DailyData.date <= end_date,
                     )
                     .all()
@@ -143,8 +143,7 @@ class DataFetcher:
                 # Delete existing indicators for this stock and date range
                 session.query(TechnicalIndicator).filter(
                     TechnicalIndicator.stock_id == stock.id,
-                    TechnicalIndicator.date >= start_date,
-                    TechnicalIndicator.date <= end_date,
+                    TechnicalIndicator.date >= start_date_with_buffer,
                 ).delete()
 
                 # Insert new indicators
@@ -159,7 +158,7 @@ class DataFetcher:
                             )
                             session.add(indicator)
 
-                stock.last_updated = datetime.now().date()
+                stock.last_updated = datetime.datetime.now().date()
                 session.commit()
 
                 progress = int((i + 1) / len(symbols) * 100)
@@ -226,3 +225,87 @@ class DataFetcher:
 
     def get_update_progress(self):
         return self.update_progress, self.update_message
+
+    def get_stock_data_with_indicators(
+        self, symbols: Union[str, List[str]], start_date: str, end_date: str
+    ) -> pd.DataFrame:
+        # Ensure symbols is a list for consistent processing
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+        # Initialize an empty list to hold DataFrames for all symbols
+        all_data = []
+
+        for symbol in symbols:
+            # Start a session
+            session = self.Session()
+
+            # Fetch daily stock data from the database
+            stock = session.query(Stock).filter_by(symbol=symbol).first()
+
+            if not stock:
+                session.close()
+                continue
+
+            daily_data = (
+                session.query(DailyData)
+                .filter(
+                    DailyData.stock_id == stock.id,
+                    DailyData.date >= start_date,
+                    DailyData.date <= end_date,
+                )
+                .all()
+            )
+
+            indicators = (
+                session.query(TechnicalIndicator)
+                .filter(
+                    TechnicalIndicator.stock_id == stock.id,
+                    TechnicalIndicator.date >= start_date,
+                    TechnicalIndicator.date <= end_date,
+                )
+                .all()
+            )
+
+            session.close()
+
+            if not daily_data:
+                continue
+
+            # Create DataFrame from daily data
+            df = pd.DataFrame([d.__dict__ for d in daily_data])
+            df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
+            df.set_index("date", inplace=True)
+            df.index = pd.to_datetime(df.index)
+
+            # Create DataFrame from indicators
+            indicator_data = [
+                (ind.date, ind.indicator_name, ind.value) for ind in indicators
+            ]
+            indicator_df = pd.DataFrame(
+                indicator_data, columns=["date", "indicator_name", "value"]
+            )
+            indicator_df["date"] = pd.to_datetime(indicator_df["date"])
+
+            # Pivot the indicator DataFrame
+            indicator_df = indicator_df.pivot(
+                index="date", columns="indicator_name", values="value"
+            )
+
+            # Merge daily data with indicator data
+            df = df.join(indicator_df)
+
+            # Add a column for the stock symbol for identification in case of multiple stocks
+            df["symbol"] = symbol
+
+            # Append the combined data for this symbol to the list
+            all_data.append(df)
+
+        if all_data:
+            # Concatenate all DataFrames into a single DataFrame
+            final_df = pd.concat(all_data, axis=0)
+        else:
+            # Return an empty DataFrame if no data found for any symbols
+            final_df = pd.DataFrame()
+
+        return final_df.reset_index()

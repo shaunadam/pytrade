@@ -28,11 +28,11 @@ def recalculate_indicators(
 ):
     fetcher = DataFetcher(DB_PATH)
     if symbols:
-        fetcher.recalculate_indicators(symbols, start_date, end_date)
+        fetcher.update_indicators(symbols, start_date, end_date)
     else:
         try:
             print(f"Recalculating indicators for all TSX symbols")
-            fetcher.recalculate_indicators(TSX_SYMBOLS, start_date, end_date)
+            fetcher.update_indicators(TSX_SYMBOLS, start_date, end_date)
         except Exception as e:
             print(f"Error recalculating indicators: {str(e)}")
 
