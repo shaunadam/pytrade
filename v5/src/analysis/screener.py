@@ -32,8 +32,11 @@ class Screener:
             data = self.data_fetcher.get_stock_data_with_indicators(
                 symbol, start_date, end_date
             )
-            if data is not None and self.apply_conditions(data):
-                results.append({"symbol": symbol, **self.calculate_sort_criteria(data)})
+            if not data.empty:
+                if self.apply_conditions(data):
+                    results.append(
+                        {"symbol": symbol, **self.calculate_sort_criteria(data)}
+                    )
 
         results_df = pd.DataFrame(results)
         return self.sort_and_limit_results(results_df)
@@ -45,49 +48,109 @@ class Screener:
         return True
 
     def check_condition(self, condition: Dict[str, Any], data: pd.DataFrame) -> bool:
-        if condition["type"] == "indicator_comparison":
-            return self.check_indicator_comparison(condition, data)
-        elif condition["type"] == "price_action":
-            return self.check_price_action(condition, data)
-        elif condition["type"] == "volume_action":
-            return self.check_volume_action(condition, data)
-        elif condition["type"] == "indicator_value":
-            return self.check_indicator_value(condition, data)
-        else:
-            raise ValueError(f"Unknown condition type: {condition['type']}")
+        try:
+            if condition["type"] == "indicator_comparison":
+                return self.check_indicator_comparison(condition, data)
+            elif condition["type"] == "price_action":
+                return self.check_price_action(condition, data)
+            elif condition["type"] == "volume_action":
+                return self.check_volume_action(condition, data)
+            elif condition["type"] == "indicator_value":
+                return self.check_indicator_value(condition, data)
+            else:
+                raise ValueError(f"Unknown condition type: {condition['type']}")
+        except (KeyError, IndexError, TypeError) as e:
+            # Log the exception if necessary
+            # For example: logging.warning(f"Condition check failed for {condition}: {e}")
+            return False
 
     def check_indicator_comparison(
         self, condition: Dict[str, Any], data: pd.DataFrame
     ) -> bool:
-        ind1 = data[condition["indicator1"]]
-        ind2 = data[condition["indicator2"]]
-        op = self.get_operator(condition["operator"])
+        indicator1 = condition.get("indicator1")
+        indicator2 = condition.get("indicator2")
+        operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 1)
-        return op(ind1.tail(lookback), ind2.tail(lookback)).all()
+
+        # Validate presence of indicators
+        if indicator1 not in data.columns or indicator2 not in data.columns:
+            return False
+
+        # Validate sufficient data for lookback
+        if len(data) < lookback:
+            return False
+
+        ind1 = data[indicator1].tail(lookback)
+        ind2 = data[indicator2].tail(lookback)
+        op = self.get_operator(operator)
+        if op is None:
+            raise ValueError(f"Invalid operator: {operator}")
+
+        return op(ind1, ind2).all()
 
     def check_price_action(self, condition: Dict[str, Any], data: pd.DataFrame) -> bool:
-        price = data[condition["attribute"]]
-        op = self.get_operator(condition["operator"])
-        return op(price.iloc[-1], condition["value"])
+        attribute = condition.get("attribute")
+        operator = condition.get("operator")
+        value = condition.get("value")
+
+        # Validate presence of attribute
+        if attribute not in data.columns:
+            return False
+
+        # Validate sufficient data
+        if len(data) < 1:
+            return False
+
+        price = data[attribute].iloc[-1]
+        op = self.get_operator(operator)
+        if op is None:
+            raise ValueError(f"Invalid operator: {operator}")
+
+        return op(price, value)
 
     def check_volume_action(
         self, condition: Dict[str, Any], data: pd.DataFrame
     ) -> bool:
-        volume = data["volume"]
+        operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 5)
-        if condition["operator"] == "increasing":
+
+        # Validate presence of volume
+        if "volume" not in data.columns:
+            return False
+
+        # Validate sufficient data for lookback
+        if len(data) < (lookback + 1):  # +1 because diff reduces length by 1
+            return False
+
+        volume = data["volume"]
+        if operator == "increasing":
             return (volume.diff().tail(lookback) > 0).all()
-        elif condition["operator"] == "decreasing":
+        elif operator == "decreasing":
             return (volume.diff().tail(lookback) < 0).all()
         else:
-            raise ValueError(f"Unknown volume action operator: {condition['operator']}")
+            raise ValueError(f"Unknown volume action operator: {operator}")
 
     def check_indicator_value(
         self, condition: Dict[str, Any], data: pd.DataFrame
     ) -> bool:
-        indicator = data[condition["indicator"]]
-        op = self.get_operator(condition["operator"])
-        return op(indicator.iloc[-1], condition["value"])
+        indicator = condition.get("indicator")
+        operator = condition.get("operator")
+        value = condition.get("value")
+
+        # Validate presence of indicator
+        if indicator not in data.columns:
+            return False
+
+        # Validate sufficient data
+        if len(data) < 1:
+            return False
+
+        indicator_value = data[indicator].iloc[-1]
+        op = self.get_operator(operator)
+        if op is None:
+            raise ValueError(f"Invalid operator: {operator}")
+
+        return op(indicator_value, value)
 
     def calculate_sort_criteria(self, data: pd.DataFrame) -> Dict[str, float]:
         criteria = {}
@@ -98,6 +161,8 @@ class Screener:
         return criteria
 
     def sort_and_limit_results(self, results_df: pd.DataFrame) -> pd.DataFrame:
+        if results_df.empty:
+            return results_df
         if "sort_by" in self.config:
             sort_columns = [item["attribute"] for item in self.config["sort_by"]]
             sort_ascending = [

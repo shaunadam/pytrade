@@ -34,8 +34,6 @@ custom_indicators:
 sort_by:
   - attribute: "volume"
     order: "descending"
-  - attribute: "market_cap"
-    order: "descending"
 
 # Optional: limit the number of results
 limit: 50
