@@ -3,12 +3,24 @@
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from src.data.fetcher import DataService
-from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE, date_ranges
+from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
 import pandas as pd
 import dash
 import logging
+from datetime import timedelta, datetime
 
 logger = logging.getLogger(__name__)
+
+# Define date_ranges locally
+date_ranges = {
+    "1W": timedelta(days=7),
+    "1M": timedelta(days=30),
+    "3M": timedelta(days=90),
+    "6M": timedelta(days=180),
+    "1Y": timedelta(days=365),
+    "YTD": None,  # Special case, handled in callback
+    "MAX": None,  # Special case, uses start_date
+}
 
 
 def register_analysis_callbacks(app):
@@ -42,9 +54,8 @@ def register_analysis_callbacks(app):
                 start_date = START_DATE
                 end_date = end_date_dt.isoformat()
             elif range_name == "YTD":
-                start_date = (
-                    pd.to_datetime(end_date).replace(month=1, day=1).date().isoformat()
-                )
+                start_of_year = datetime(end_date_dt.year, 1, 1).date()
+                start_date = start_of_year.isoformat()
                 end_date = end_date_dt.isoformat()
             else:
                 delta = date_ranges.get(range_name)

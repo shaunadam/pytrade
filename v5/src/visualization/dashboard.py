@@ -3,13 +3,18 @@
 import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
-from src.visualization.components.analysis_tab import render_analysis_tab
-from src.visualization.components.screening_tab import render_screening_tab
-from src.visualization.components.backtesting_tab import render_backtesting_tab
-from src.visualization.components.utilities_tab import render_utilities_tab
-from src.visualization.callbacks.screening_callbacks import register_screening_callbacks
-from src.visualization.callbacks.analysis_callbacks import register_analysis_callbacks
-from src.visualization.callbacks.utilities_callbacks import register_utilities_callbacks
+from src.visualization.components import (
+    render_analysis_tab,
+    render_backtesting_tab,
+    render_screening_tab,
+    render_utilities_tab,
+)
+from src.visualization.callbacks import (
+    register_analysis_callbacks,
+    register_backtesting_callbacks,
+    register_screening_callbacks,
+    register_utilities_callbacks,
+)
 from config import DB_PATH, TSX_SYMBOLS, START_DATE
 from datetime import datetime, timedelta
 import os
@@ -70,9 +75,10 @@ def render_tab_content(active_tab, session_data):
 
 
 # Register Callbacks
-register_screening_callbacks(app)
 register_analysis_callbacks(app)
+register_screening_callbacks(app)
 register_utilities_callbacks(app)
+register_backtesting_callbacks(app)
 
 if __name__ == "__main__":
     app.run_server(debug=True)

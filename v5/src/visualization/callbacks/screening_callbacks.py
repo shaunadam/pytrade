@@ -1,7 +1,7 @@
 # src/visualization/callbacks/screening_callbacks.py
 
 from dash.dependencies import Input, Output, State
-import dash_table
+from dash import dash_table
 from src.visualization.components.screening_tab import get_available_screeners
 from src.analysis.screener import Screener
 from src.data.fetcher import DataService
