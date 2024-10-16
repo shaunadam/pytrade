@@ -8,7 +8,7 @@ import pandas as pd
 import yfinance as yf
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import sessionmaker, Session
-from src.analysis.indicators import sma, ema, rsi, macd
+from src.analysis.indicators import sma, ema, rsi, macd, bollinger_bands
 from src.database.init_db import Stock, DailyData, TechnicalIndicator
 
 # Configure logging
@@ -186,6 +186,10 @@ class IndicatorCalculator:
             indicators["MACD_Signal"] = macd_data["Signal"]
             indicators["MACD_Histogram"] = macd_data["Histogram"]
             indicators = indicators.dropna(how="all")
+            bollinger_data = bollinger_bands(close_prices)
+            indicators["BB_Middle"] = bollinger_data["SMA"]
+            indicators["BB_Upper"] = bollinger_data["Upper"]
+            indicators["BB_Lower"] = bollinger_data["Lower"]
             return indicators
         except Exception as e:
             logger.error(f"Error calculating indicators: {str(e)}")

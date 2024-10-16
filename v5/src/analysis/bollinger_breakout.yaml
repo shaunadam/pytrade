@@ -1,0 +1,20 @@
+name: "Bollinger Bands Breakout Screener"
+description: "Identifies stocks where the price crosses above the upper Bollinger Band, suggesting a breakout."
+
+conditions:
+  - type: "indicator_cross"
+    indicator1: "close"
+    direction: "above"
+    indicator2: "BB_Upper"
+    lookback_periods: 1
+
+  - type: "price_action"
+    attribute: "close"
+    operator: ">"
+    value: 10
+
+sort_by:
+  - attribute: "volume"
+    order: "descending"
+
+limit: 50

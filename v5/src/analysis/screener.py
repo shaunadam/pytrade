@@ -57,6 +57,9 @@ class Screener:
                 return self.check_volume_action(condition, data)
             elif condition["type"] == "indicator_value":
                 return self.check_indicator_value(condition, data)
+            elif condition["type"] == "indicator_cross":
+                return self.check_indicator_cross(condition, data)
+
             else:
                 raise ValueError(f"Unknown condition type: {condition['type']}")
         except (KeyError, IndexError, TypeError) as e:
@@ -113,13 +116,14 @@ class Screener:
     ) -> bool:
         operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 5)
+        threshold = condition.get("threshold", 2.0)
 
         # Validate presence of volume
         if "volume" not in data.columns:
             return False
 
         # Validate sufficient data for lookback
-        if len(data) < (lookback + 1):  # +1 because diff reduces length by 1
+        if len(data) < lookback:
             return False
 
         volume = data["volume"]
@@ -127,6 +131,10 @@ class Screener:
             return (volume.diff().tail(lookback) > 0).all()
         elif operator == "decreasing":
             return (volume.diff().tail(lookback) < 0).all()
+        elif operator == "spike":
+            average_volume = volume.tail(lookback + 1).iloc[:-1].mean()
+            last_volume = volume.iloc[-1]
+            return last_volume >= threshold * average_volume
         else:
             raise ValueError(f"Unknown volume action operator: {operator}")
 
@@ -151,6 +159,47 @@ class Screener:
             raise ValueError(f"Invalid operator: {operator}")
 
         return op(indicator_value, value)
+
+    def check_indicator_cross(
+        self, condition: Dict[str, Any], data: pd.DataFrame
+    ) -> bool:
+        indicator1 = condition.get("indicator1")
+        direction = condition.get("direction")  # "above" or "below"
+        indicator2 = condition.get("indicator2")
+        value = condition.get("value")
+        lookback = condition.get("lookback_periods", 1)
+
+        # Validate presence of indicators
+        if indicator1 not in data.columns:
+            return False
+
+        # Determine the second series
+        if indicator2:
+            if indicator2 not in data.columns:
+                return False
+            series2 = data[indicator2]
+        elif value is not None:
+            series2 = pd.Series(value, index=data.index)
+        else:
+            return False
+
+        # Validate sufficient data for lookback
+        if len(data) < (lookback + 1):
+            return False
+
+        series1 = data[indicator1]
+        diff = series1 - series2
+        diff_shifted = diff.shift(1)
+
+        if direction == "above":
+            cross = (diff > 0) & (diff_shifted <= 0)
+        elif direction == "below":
+            cross = (diff < 0) & (diff_shifted >= 0)
+        else:
+            raise ValueError(f"Invalid direction: {direction}")
+
+        # Check if the crossover happened in the last 'lookback' periods
+        return cross.tail(lookback).any()
 
     def calculate_sort_criteria(self, data: pd.DataFrame) -> Dict[str, float]:
         criteria = {}
