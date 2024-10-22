@@ -1,0 +1,9 @@
+yfinance
+sqlalchemy
+pandas
+plotly
+dash
+dash-bootstrap-components
+requests
+pandas_datareader
+pendulum

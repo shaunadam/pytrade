@@ -1,7 +1,0 @@
-psycopg2-binary
-Dash
-Pandas
-dash-bootstrap-components
-yfinance
-pandas_datareader
-sqlalchemy

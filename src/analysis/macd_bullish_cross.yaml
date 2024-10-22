@@ -1,0 +1,25 @@
+name: "MACD Bullish Crossover Screener"
+description: "Identifies stocks where the MACD line crosses above the Signal line, indicating bullish momentum."
+
+conditions:
+  - type: "indicator_cross"
+    indicator1: "MACD"
+    direction: "above"
+    indicator2: "MACD_Signal"
+    lookback_periods: 1
+
+  - type: "indicator_value"
+    indicator: "MACD_Histogram"
+    operator: ">"
+    value: 0
+
+  - type: "price_action"
+    attribute: "close"
+    operator: ">"
+    value: 10
+
+sort_by:
+  - attribute: "volume"
+    order: "descending"
+
+limit: 50
