@@ -1,5 +1,3 @@
-# src/visualization/callbacks/utilities_callbacks.py
-
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from src.data.fetcher import DataService
@@ -36,7 +34,7 @@ def register_utilities_callbacks(app):
                         TSX_SYMBOLS, start_date, end_date
                     ),
                     DataService(DB_PATH).update_indicators(
-                        TSX_SYMBOLS, start_date, end_date
+                        TSX_SYMBOLS, start_date, end_date, time_frame="daily"
                     ),
                 ),
                 daemon=True,  # Ensure thread exits when main program does
@@ -45,9 +43,7 @@ def register_utilities_callbacks(app):
             return dbc.Progress(value=0, id="download-progress"), False
 
         if trigger_id == "download-progress-interval":
-            # Here you can implement progress tracking logic
-            # For simplicity, we'll assume the process is instant
-            # In a real scenario, you might integrate with the DataService's ProgressTracker
+            # need to implement
             return "Download complete.", True
 
         return dash.no_update, dash.no_update

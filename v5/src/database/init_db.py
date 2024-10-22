@@ -10,7 +10,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
 )
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship
 import os
 
@@ -24,6 +24,7 @@ class Stock(Base):
     name = Column(String)
     last_updated = Column(DateTime)
     daily_data = relationship("DailyData", back_populates="stock")
+    weekly_data = relationship("WeeklyData", back_populates="stock")
     technical_indicators = relationship("TechnicalIndicator", back_populates="stock")
 
 
@@ -45,6 +46,24 @@ class DailyData(Base):
     )
 
 
+class WeeklyData(Base):
+    __tablename__ = "weekly_data"
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(Integer, ForeignKey("stocks.id"), nullable=False)
+    week_start_date = Column(Date, nullable=False)
+    open = Column(Float, nullable=False)
+    high = Column(Float, nullable=False)
+    low = Column(Float, nullable=False)
+    close = Column(Float, nullable=False)
+    volume = Column(Integer, nullable=False)
+    stock = relationship("Stock", back_populates="weekly_data")
+
+    __table_args__ = (
+        UniqueConstraint("stock_id", "week_start_date", name="uix_stock_week"),
+        Index("idx_weekly_data_stock_week", "stock_id", "week_start_date"),
+    )
+
+
 class TechnicalIndicator(Base):
     __tablename__ = "technical_indicators"
     id = Column(Integer, primary_key=True)
@@ -52,11 +71,16 @@ class TechnicalIndicator(Base):
     date = Column(Date, nullable=False)
     indicator_name = Column(String, nullable=False)
     value = Column(Float, nullable=False)
+    time_frame = Column(String, nullable=False, default="daily")
     stock = relationship("Stock", back_populates="technical_indicators")
 
     __table_args__ = (
         UniqueConstraint(
-            "stock_id", "date", "indicator_name", name="uix_stock_date_indicator"
+            "stock_id",
+            "date",
+            "indicator_name",
+            "time_frame",
+            name="uix_stock_date_indicator",
         ),
         Index("idx_technical_indicators_stock_date", "stock_id", "date"),
     )

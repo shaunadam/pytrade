@@ -1,5 +1,3 @@
-# src/visualization/callbacks/analysis_callbacks.py
-
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from src.data.fetcher import DataService
@@ -186,7 +184,7 @@ def register_analysis_callbacks(app):
 
         data_service = DataService(DB_PATH)
         df = data_service.get_stock_data_with_indicators(
-            selected_stock, start_date, end_date
+            selected_stock, start_date, end_date, time_frame="daily"
         )
 
         if df.empty:

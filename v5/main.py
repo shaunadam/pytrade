@@ -25,7 +25,9 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
         try:
             logger.info(f"Updating data for symbols: {symbols}")
             data_service.update_all_stocks(symbols, start_date, end_date)
-            data_service.update_indicators(symbols, start_date, end_date)
+            data_service.update_indicators(
+                symbols, start_date, end_date, time_frame="daily"
+            )
             logger.info(
                 "Data update and indicator recalculation completed successfully."
             )
@@ -35,7 +37,9 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
         try:
             logger.info("Updating data for all TSX symbols.")
             data_service.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
-            data_service.update_indicators(TSX_SYMBOLS, start_date, end_date)
+            data_service.update_indicators(
+                TSX_SYMBOLS, start_date, end_date, time_frame="daily"
+            )
             logger.info(
                 "Data update and indicator recalculation for all TSX symbols completed successfully."
             )
@@ -44,7 +48,7 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
 
 
 def recalculate_indicators(
-    symbols: list = None, start_date=START_DATE, end_date=END_DATE
+    symbols: list = None, start_date=START_DATE, end_date=END_DATE, time_frame="daily"
 ):
     """
     Recalculates technical indicators for specified symbols.
@@ -53,21 +57,30 @@ def recalculate_indicators(
         symbols (list, optional): List of stock symbols. Defaults to None.
         start_date (str, optional): Start date for recalculating indicators. Defaults to START_DATE.
         end_date (str, optional): End date for recalculating indicators. Defaults to END_DATE.
+        time_frame (str, optional): Time frame for indicators ('daily' or 'weekly'). Defaults to 'daily'.
     """
     data_service = DataService(DB_PATH)  # Instantiate DataService
     if symbols:
         try:
-            logger.info(f"Recalculating indicators for symbols: {symbols}")
-            data_service.update_indicators(symbols, start_date, end_date)
+            logger.info(
+                f"Recalculating indicators for symbols: {symbols} with time_frame: {time_frame}"
+            )
+            data_service.update_indicators(
+                symbols, start_date, end_date, time_frame=time_frame
+            )
             logger.info("Indicator recalculation completed successfully.")
         except Exception as e:
             logger.error(f"Error recalculating indicators: {str(e)}")
     else:
         try:
-            logger.info("Recalculating indicators for all TSX symbols.")
-            data_service.update_indicators(TSX_SYMBOLS, start_date, end_date)
             logger.info(
-                "Indicator recalculation for all TSX symbols completed successfully."
+                f"Recalculating indicators for all TSX symbols with time_frame: {time_frame}"
+            )
+            data_service.update_indicators(
+                TSX_SYMBOLS, start_date, end_date, time_frame=time_frame
+            )
+            logger.info(
+                f"Indicator recalculation for all TSX symbols with time_frame {time_frame} completed successfully."
             )
         except Exception as e:
             logger.error(f"Error recalculating indicators: {str(e)}")
@@ -89,28 +102,39 @@ def run_screener(config_name):
         config_name (str): Path to the screener configuration file.
     """
     data_service = DataService(DB_PATH)  # Instantiate DataService
-    screener = Screener(config_name, data_service)  # Pass DataService instance
+    screener = Screener(config_name)  # Pass config path
 
     logger.info(f"Running screener: {screener.config['name']}")
     logger.info(f"Description: {screener.config['description']}")
 
     try:
-        results = screener.screen(TSX_SYMBOLS, START_DATE, END_DATE)
+        results = screener.screen_data(
+            data_service.get_stock_data_with_indicators(
+                screener.config.get("symbols", TSX_SYMBOLS),
+                screener.config.get("start_date", START_DATE),
+                screener.config.get("end_date", END_DATE),
+                time_frame=screener.config.get("time_frame", "daily"),
+            )
+        )
         logger.info("\nScreening Results:")
         print(results.to_string(index=False))
     except Exception as e:
         logger.error(f"Error running screener '{config_name}': {str(e)}")
 
 
-# Uncomment the following line to run the screener directly
-# run_screener("gold_cross")
-
-
+# update_data()
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TSX Stock Analysis Tool")
     parser.add_argument("--update", action="store_true", help="Update stock data")
     parser.add_argument(
         "--recalculate", action="store_true", help="Recalculate indicators"
+    )
+    parser.add_argument(
+        "--time_frame",
+        type=str,
+        choices=["daily", "weekly"],
+        default="daily",
+        help="Time frame for indicators",
     )
     parser.add_argument("--test", action="store_true", help="Test indicators")
     parser.add_argument("--dashboard", action="store_true", help="Run the dashboard")
@@ -122,7 +146,7 @@ if __name__ == "__main__":
     if args.update:
         update_data()
     if args.recalculate:
-        recalculate_indicators()
+        recalculate_indicators(time_frame=args.time_frame)
     if args.dashboard:
         run_dashboard()
     if args.screener:

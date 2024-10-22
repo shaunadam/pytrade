@@ -1,5 +1,3 @@
-# src/visualization/components/analysis_tab.py
-
 import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc

@@ -1,5 +1,3 @@
-# src/visualization/callbacks/screening_callbacks.py
-
 from dash.dependencies import Input, Output, State
 from dash import dash_table
 from src.visualization.components.screening_tab import get_available_screeners
@@ -158,7 +156,7 @@ def register_screening_callbacks(app):
 
         # Fetch data once
         data = data_service.get_stock_data_with_indicators(
-            symbols, START_DATE, END_DATE
+            symbols, START_DATE, END_DATE, time_frame="daily"
         )
 
         if data.empty:
@@ -218,7 +216,7 @@ def register_screening_callbacks(app):
 
         data_service = DataService(DB_PATH)
         df = data_service.get_stock_data_with_indicators(
-            selected_symbol, START_DATE, END_DATE
+            selected_symbol, START_DATE, END_DATE, time_frame="daily"
         )
 
         if df.empty:

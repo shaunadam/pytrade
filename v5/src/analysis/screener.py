@@ -1,5 +1,3 @@
-# src/analysis/screener.py
-
 import yaml
 from typing import List, Dict, Any
 import pandas as pd
@@ -47,30 +45,31 @@ class Screener:
         # Start with all data
         filtered_data = data.copy()
         for condition in self.config["conditions"]:
-            filtered_data = self.apply_condition(condition, filtered_data)
+            time_frame = condition.get("time_frame", "daily")
+            filtered_data = self.apply_condition(condition, filtered_data, time_frame)
             if filtered_data.empty:
                 break
         return filtered_data
 
     def apply_condition(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         condition_type = condition.get("type")
         if condition_type == "indicator_comparison":
-            return self.check_indicator_comparison(condition, data)
+            return self.check_indicator_comparison(condition, data, time_frame)
         elif condition_type == "price_action":
-            return self.check_price_action(condition, data)
+            return self.check_price_action(condition, data, time_frame)
         elif condition_type == "volume_action":
-            return self.check_volume_action(condition, data)
+            return self.check_volume_action(condition, data, time_frame)
         elif condition_type == "indicator_value":
-            return self.check_indicator_value(condition, data)
+            return self.check_indicator_value(condition, data, time_frame)
         elif condition_type == "indicator_cross":
-            return self.check_indicator_cross(condition, data)
+            return self.check_indicator_cross(condition, data, time_frame)
         else:
             raise ValueError(f"Unknown condition type: {condition_type}")
 
     def check_indicator_comparison(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         indicator1 = condition.get("indicator1")
         indicator2 = condition.get("indicator2")
@@ -93,7 +92,7 @@ class Screener:
         return data[data["symbol"].isin(valid_symbols)]
 
     def check_price_action(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         attribute = condition.get("attribute")
         operator = condition.get("operator")
@@ -110,7 +109,7 @@ class Screener:
         return data[data["symbol"].isin(valid_symbols)]
 
     def check_volume_action(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 5)
@@ -137,7 +136,7 @@ class Screener:
         return data[data["symbol"].isin(valid_symbols)]
 
     def check_indicator_value(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         indicator = condition.get("indicator")
         operator = condition.get("operator")
@@ -154,7 +153,7 @@ class Screener:
         return data[data["symbol"].isin(valid_symbols)]
 
     def check_indicator_cross(
-        self, condition: Dict[str, Any], data: pd.DataFrame
+        self, condition: Dict[str, Any], data: pd.DataFrame, time_frame: str
     ) -> pd.DataFrame:
         indicator1 = condition.get("indicator1")
         direction = condition.get("direction")  # "above" or "below"

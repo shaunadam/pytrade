@@ -1,5 +1,3 @@
-# src/visualization/components/screening_tab.py
-
 import os
 import yaml
 import dash
