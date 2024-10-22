@@ -105,16 +105,16 @@ def render_analysis_tab(session_data):
                     dbc.Row(
                         [
                             dbc.Col(
-                                dcc.Graph(id="price-indicators-graph"), md=12, lg=6
+                                dcc.Graph(id="price-indicators-graph"), md=12, lg=12
                             ),
-                            dbc.Col(dcc.Graph(id="volume-graph"), md=12, lg=6),
+                            dbc.Col(dcc.Graph(id="volume-graph"), md=12, lg=12),
                         ],
                         className="mb-4",
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(dcc.Graph(id="macd-graph"), md=12, lg=6),
-                            dbc.Col(dcc.Graph(id="rsi-graph"), md=12, lg=6),
+                            dbc.Col(dcc.Graph(id="macd-graph"), md=12, lg=12),
+                            dbc.Col(dcc.Graph(id="rsi-graph"), md=12, lg=12),
                         ],
                         className="mb-4",
                     ),

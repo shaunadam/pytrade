@@ -155,6 +155,15 @@ def register_screening_callbacks(app):
 
         data_service = DataService(DB_PATH)
         symbols = selected_stocks if selected_stocks else TSX_SYMBOLS
+
+        # Fetch data once
+        data = data_service.get_stock_data_with_indicators(
+            symbols, START_DATE, END_DATE
+        )
+
+        if data.empty:
+            return "No data available for the selected stocks.", []
+
         results = []
 
         for screener_name in selected_screeners:
@@ -165,10 +174,9 @@ def register_screening_callbacks(app):
                         "../../analysis",
                         screener_name,
                     ),
-                    data_fetcher=data_service,
                 )
-
-                screener_results = screener.screen(symbols, START_DATE, END_DATE)
+                # Pass the data directly to the screener
+                screener_results = screener.screen_data(data)
                 for _, row in screener_results.iterrows():
                     results.append({"symbol": row["symbol"], "screener": screener_name})
             except Exception as e:

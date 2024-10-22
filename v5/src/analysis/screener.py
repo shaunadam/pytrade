@@ -1,15 +1,15 @@
+# src/analysis/screener.py
+
 import yaml
 from typing import List, Dict, Any
 import pandas as pd
 import numpy as np
-from src.data.fetcher import StockDataFetcher
 import os
 
 
 class Screener:
-    def __init__(self, config_path: str, data_fetcher: StockDataFetcher):
+    def __init__(self, config_path: str):
         self.config = self.load_config(config_path)
-        self.data_fetcher = data_fetcher
 
     def load_config(self, config_name: str) -> Dict[str, Any]:
         # Construct the path to the analysis folder
@@ -24,190 +24,174 @@ class Screener:
         with open(config_path, "r") as file:
             return yaml.safe_load(file)
 
-    def screen(
-        self, symbols: List[str], start_date: str, end_date: str
-    ) -> pd.DataFrame:
-        results = []
-        for symbol in symbols:
-            data = self.data_fetcher.get_stock_data_with_indicators(
-                symbol, start_date, end_date
-            )
-            if not data.empty:
-                if self.apply_conditions(data):
-                    results.append(
-                        {"symbol": symbol, **self.calculate_sort_criteria(data)}
-                    )
+    def screen_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        # Apply conditions to the data
+        filtered_data = self.apply_conditions(data)
 
-        results_df = pd.DataFrame(results)
-        return self.sort_and_limit_results(results_df)
+        if filtered_data.empty:
+            return pd.DataFrame()
 
-    def apply_conditions(self, data: pd.DataFrame) -> bool:
+        # Calculate sorting criteria if any
+        if "sort_by" in self.config:
+            filtered_data = self.calculate_sort_criteria(filtered_data)
+
+        # Keep all columns and drop duplicates on 'symbol'
+        results = filtered_data.drop_duplicates(subset=["symbol"])
+
+        # Apply sorting and limit
+        results = self.sort_and_limit_results(results)
+
+        return results
+
+    def apply_conditions(self, data: pd.DataFrame) -> pd.DataFrame:
+        # Start with all data
+        filtered_data = data.copy()
         for condition in self.config["conditions"]:
-            if not self.check_condition(condition, data):
-                return False
-        return True
+            filtered_data = self.apply_condition(condition, filtered_data)
+            if filtered_data.empty:
+                break
+        return filtered_data
 
-    def check_condition(self, condition: Dict[str, Any], data: pd.DataFrame) -> bool:
-        try:
-            if condition["type"] == "indicator_comparison":
-                return self.check_indicator_comparison(condition, data)
-            elif condition["type"] == "price_action":
-                return self.check_price_action(condition, data)
-            elif condition["type"] == "volume_action":
-                return self.check_volume_action(condition, data)
-            elif condition["type"] == "indicator_value":
-                return self.check_indicator_value(condition, data)
-            elif condition["type"] == "indicator_cross":
-                return self.check_indicator_cross(condition, data)
-
-            else:
-                raise ValueError(f"Unknown condition type: {condition['type']}")
-        except (KeyError, IndexError, TypeError) as e:
-            # Log the exception if necessary
-            # For example: logging.warning(f"Condition check failed for {condition}: {e}")
-            return False
+    def apply_condition(
+        self, condition: Dict[str, Any], data: pd.DataFrame
+    ) -> pd.DataFrame:
+        condition_type = condition.get("type")
+        if condition_type == "indicator_comparison":
+            return self.check_indicator_comparison(condition, data)
+        elif condition_type == "price_action":
+            return self.check_price_action(condition, data)
+        elif condition_type == "volume_action":
+            return self.check_volume_action(condition, data)
+        elif condition_type == "indicator_value":
+            return self.check_indicator_value(condition, data)
+        elif condition_type == "indicator_cross":
+            return self.check_indicator_cross(condition, data)
+        else:
+            raise ValueError(f"Unknown condition type: {condition_type}")
 
     def check_indicator_comparison(
         self, condition: Dict[str, Any], data: pd.DataFrame
-    ) -> bool:
+    ) -> pd.DataFrame:
         indicator1 = condition.get("indicator1")
         indicator2 = condition.get("indicator2")
         operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 1)
 
-        # Validate presence of indicators
-        if indicator1 not in data.columns or indicator2 not in data.columns:
-            return False
+        # Shift data to get the lookback period
+        data_shifted = data.groupby("symbol").apply(lambda x: x.tail(lookback))
 
-        # Validate sufficient data for lookback
-        if len(data) < lookback:
-            return False
-
-        ind1 = data[indicator1].tail(lookback)
-        ind2 = data[indicator2].tail(lookback)
-        op = self.get_operator(operator)
-        if op is None:
+        op_func = self.get_operator(operator)
+        if op_func is None:
             raise ValueError(f"Invalid operator: {operator}")
 
-        return op(ind1, ind2).all()
+        condition_met = op_func(data_shifted[indicator1], data_shifted[indicator2])
 
-    def check_price_action(self, condition: Dict[str, Any], data: pd.DataFrame) -> bool:
+        # Filter data where the condition is True for all lookback periods
+        condition_met_grouped = condition_met.groupby(data_shifted["symbol"]).all()
+        valid_symbols = condition_met_grouped[condition_met_grouped].index
+
+        return data[data["symbol"].isin(valid_symbols)]
+
+    def check_price_action(
+        self, condition: Dict[str, Any], data: pd.DataFrame
+    ) -> pd.DataFrame:
         attribute = condition.get("attribute")
         operator = condition.get("operator")
         value = condition.get("value")
 
-        # Validate presence of attribute
-        if attribute not in data.columns:
-            return False
-
-        # Validate sufficient data
-        if len(data) < 1:
-            return False
-
-        price = data[attribute].iloc[-1]
-        op = self.get_operator(operator)
-        if op is None:
+        op_func = self.get_operator(operator)
+        if op_func is None:
             raise ValueError(f"Invalid operator: {operator}")
 
-        return op(price, value)
+        latest_data = data.groupby("symbol").tail(1)
+        condition_met = op_func(latest_data[attribute], value)
+        valid_symbols = latest_data[condition_met]["symbol"]
+
+        return data[data["symbol"].isin(valid_symbols)]
 
     def check_volume_action(
         self, condition: Dict[str, Any], data: pd.DataFrame
-    ) -> bool:
+    ) -> pd.DataFrame:
         operator = condition.get("operator")
         lookback = condition.get("lookback_periods", 5)
         threshold = condition.get("threshold", 2.0)
 
-        # Validate presence of volume
-        if "volume" not in data.columns:
-            return False
-
-        # Validate sufficient data for lookback
-        if len(data) < lookback:
-            return False
-
-        volume = data["volume"]
+        data_grouped = data.groupby("symbol")
         if operator == "increasing":
-            return (volume.diff().tail(lookback) > 0).all()
+            condition_met = data_grouped["volume"].apply(
+                lambda x: x.tail(lookback).diff().gt(0).all()
+            )
         elif operator == "decreasing":
-            return (volume.diff().tail(lookback) < 0).all()
+            condition_met = data_grouped["volume"].apply(
+                lambda x: x.tail(lookback).diff().lt(0).all()
+            )
         elif operator == "spike":
-            average_volume = volume.tail(lookback + 1).iloc[:-1].mean()
-            last_volume = volume.iloc[-1]
-            return last_volume >= threshold * average_volume
+            condition_met = data_grouped.apply(
+                lambda x: x["volume"].iloc[-1]
+                >= threshold * x["volume"].iloc[-(lookback + 1) : -1].mean()
+            )
         else:
             raise ValueError(f"Unknown volume action operator: {operator}")
 
+        valid_symbols = condition_met[condition_met].index
+        return data[data["symbol"].isin(valid_symbols)]
+
     def check_indicator_value(
         self, condition: Dict[str, Any], data: pd.DataFrame
-    ) -> bool:
+    ) -> pd.DataFrame:
         indicator = condition.get("indicator")
         operator = condition.get("operator")
         value = condition.get("value")
 
-        # Validate presence of indicator
-        if indicator not in data.columns:
-            return False
-
-        # Validate sufficient data
-        if len(data) < 1:
-            return False
-
-        indicator_value = data[indicator].iloc[-1]
-        op = self.get_operator(operator)
-        if op is None:
+        op_func = self.get_operator(operator)
+        if op_func is None:
             raise ValueError(f"Invalid operator: {operator}")
 
-        return op(indicator_value, value)
+        latest_data = data.groupby("symbol").tail(1)
+        condition_met = op_func(latest_data[indicator], value)
+        valid_symbols = latest_data[condition_met]["symbol"]
+
+        return data[data["symbol"].isin(valid_symbols)]
 
     def check_indicator_cross(
         self, condition: Dict[str, Any], data: pd.DataFrame
-    ) -> bool:
+    ) -> pd.DataFrame:
         indicator1 = condition.get("indicator1")
         direction = condition.get("direction")  # "above" or "below"
         indicator2 = condition.get("indicator2")
         value = condition.get("value")
         lookback = condition.get("lookback_periods", 1)
 
-        # Validate presence of indicators
-        if indicator1 not in data.columns:
-            return False
-
-        # Determine the second series
-        if indicator2:
-            if indicator2 not in data.columns:
+        def cross_condition(group):
+            if len(group) < lookback + 1:
                 return False
-            series2 = data[indicator2]
-        elif value is not None:
-            series2 = pd.Series(value, index=data.index)
-        else:
-            return False
+            series1 = group[indicator1]
+            if indicator2:
+                series2 = group[indicator2]
+            elif value is not None:
+                series2 = pd.Series(value, index=group.index)
+            else:
+                return False
 
-        # Validate sufficient data for lookback
-        if len(data) < (lookback + 1):
-            return False
+            diff = series1 - series2
+            diff_shifted = diff.shift(1)
+            if direction == "above":
+                cross = (diff > 0) & (diff_shifted <= 0)
+            elif direction == "below":
+                cross = (diff < 0) & (diff_shifted >= 0)
+            else:
+                raise ValueError(f"Invalid direction: {direction}")
+            return cross.tail(lookback).any()
 
-        series1 = data[indicator1]
-        diff = series1 - series2
-        diff_shifted = diff.shift(1)
+        condition_met = data.groupby("symbol").apply(cross_condition)
+        valid_symbols = condition_met[condition_met].index
 
-        if direction == "above":
-            cross = (diff > 0) & (diff_shifted <= 0)
-        elif direction == "below":
-            cross = (diff < 0) & (diff_shifted >= 0)
-        else:
-            raise ValueError(f"Invalid direction: {direction}")
+        return data[data["symbol"].isin(valid_symbols)]
 
-        # Check if the crossover happened in the last 'lookback' periods
-        return cross.tail(lookback).any()
-
-    def calculate_sort_criteria(self, data: pd.DataFrame) -> Dict[str, float]:
-        criteria = {}
-        for sort_item in self.config.get("sort_by", []):
-            attribute = sort_item["attribute"]
-            if attribute in data.columns:
-                criteria[attribute] = data[attribute].iloc[-1]
-        return criteria
+    def calculate_sort_criteria(self, data: pd.DataFrame) -> pd.DataFrame:
+        # Assuming we need to get the latest value for sorting
+        latest_data = data.groupby("symbol").tail(1)
+        return latest_data
 
     def sort_and_limit_results(self, results_df: pd.DataFrame) -> pd.DataFrame:
         if results_df.empty:
@@ -237,8 +221,3 @@ class Screener:
             "!=": np.not_equal,
         }
         return ops.get(op_string)
-
-
-# Example usage:
-# screener = Screener("path_to_config.yaml", data_fetcher)
-# results = screener.screen(symbols, start_date, end_date)

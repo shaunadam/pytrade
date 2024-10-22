@@ -6,7 +6,7 @@ from typing import List, Dict, Union
 
 import pandas as pd
 import yfinance as yf
-from sqlalchemy import create_engine, select, text
+from sqlalchemy import create_engine, select, text, or_
 from sqlalchemy.orm import sessionmaker, Session
 from src.analysis.indicators import sma, ema, rsi, macd, bollinger_bands
 from src.database.init_db import Stock, DailyData, TechnicalIndicator
@@ -389,101 +389,100 @@ class DataService:
                 )
                 raise
 
+    # In src/data/fetcher.py
+
     def get_stock_data_with_indicators(
         self, symbols: Union[str, List[str]], start_date: str, end_date: str
     ) -> pd.DataFrame:
-        """
-        Retrieves stock data along with technical indicators for the given symbols and date range.
-        """
+
         if isinstance(symbols, str):
             symbols = [symbols]
-
-        all_data = []
 
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
 
-            try:
-                for symbol in symbols:
-                    stock = repository.get_stock_by_symbol(symbol)
-                    if not stock:
-                        logger.warning(
-                            f"Stock {symbol} not found in database. Skipping."
-                        )
-                        continue
-
-                    daily_data = (
-                        session.query(DailyData)
-                        .filter(
-                            DailyData.stock_id == stock.id,
-                            DailyData.date >= start_date,
-                            DailyData.date <= end_date,
-                        )
-                        .all()
-                    )
-
-                    indicators = (
-                        session.query(TechnicalIndicator)
-                        .filter(
-                            TechnicalIndicator.stock_id == stock.id,
-                            TechnicalIndicator.date >= start_date,
-                            TechnicalIndicator.date <= end_date,
-                        )
-                        .all()
-                    )
-
-                    if not daily_data:
-                        logger.warning(f"No data found for {symbol}. Skipping.")
-                        continue
-
-                    # Create DataFrame from daily data
-                    df = pd.DataFrame([d.__dict__ for d in daily_data])
-                    df = df.drop(["id", "stock_id"], axis=1, errors="ignore")
-                    df.set_index("date", inplace=True)
-                    df.index = pd.to_datetime(df.index)
-
-                    # Create DataFrame from indicators
-                    indicator_data = [
-                        (ind.date, ind.indicator_name, ind.value) for ind in indicators
-                    ]
-                    indicator_df = pd.DataFrame(
-                        indicator_data, columns=["date", "indicator_name", "value"]
-                    )
-                    indicator_df["date"] = pd.to_datetime(indicator_df["date"])
-
-                    # Pivot the indicator DataFrame
-                    if not indicator_df.empty:
-                        indicator_df = indicator_df.pivot(
-                            index="date", columns="indicator_name", values="value"
-                        )
-                        # Merge daily data with indicator data
-                        df = df.join(indicator_df)
-                    else:
-                        logger.warning(
-                            f"No indicators found for {symbol} within the specified date range."
-                        )
-
-                    # Add a column for the stock symbol for identification in case of multiple stocks
-                    df["symbol"] = symbol
-
-                    # Append the combined data for this symbol to the list
-                    all_data.append(df)
-
-                if all_data:
-                    # Concatenate all DataFrames into a single DataFrame
-                    final_df = pd.concat(all_data, axis=0).reset_index()
-                else:
-                    # Return an empty DataFrame if no data found for any symbols
-                    final_df = pd.DataFrame()
-
-                return final_df
-            except Exception as e:
-                logger.error(f"Error retrieving stock data with indicators: {str(e)}")
-                logger.error(traceback.format_exc())
+            # Fetch all stocks matching the symbols
+            stocks = session.query(Stock).filter(Stock.symbol.in_(symbols)).all()
+            if not stocks:
+                logger.warning("No stocks found for the given symbols.")
                 return pd.DataFrame()
 
+            stock_id_to_symbol = {stock.id: stock.symbol for stock in stocks}
+            stock_ids = list(stock_id_to_symbol.keys())
 
-# ---------------------- Example Usage ----------------------
+            # Fetch daily data in bulk
+            daily_data_query = (
+                session.query(DailyData)
+                .filter(
+                    DailyData.stock_id.in_(stock_ids),
+                    DailyData.date >= start_date,
+                    DailyData.date <= end_date,
+                )
+                .order_by(DailyData.date)
+            )
+            daily_data_df = pd.read_sql(daily_data_query.statement, session.bind)
+
+            if daily_data_df.empty:
+                logger.warning("No daily data found for the given date range.")
+                return pd.DataFrame()
+
+            # Map stock IDs to symbols in the daily data
+            daily_data_df["symbol"] = daily_data_df["stock_id"].map(stock_id_to_symbol)
+            daily_data_df.drop(columns=["id", "stock_id"], inplace=True)
+            daily_data_df["date"] = pd.to_datetime(daily_data_df["date"])
+
+            # Fetch technical indicators in bulk
+            indicators_query = (
+                session.query(TechnicalIndicator)
+                .filter(
+                    TechnicalIndicator.stock_id.in_(stock_ids),
+                    TechnicalIndicator.date >= start_date,
+                    TechnicalIndicator.date <= end_date,
+                )
+                .order_by(TechnicalIndicator.date)
+            )
+            indicators_df = pd.read_sql(indicators_query.statement, session.bind)
+
+            if indicators_df.empty:
+                logger.warning(
+                    "No technical indicators found for the given date range."
+                )
+                # Proceed without indicators
+
+                # Pivot the DataFrame to have dates as index and symbols as columns
+                daily_data_pivot = daily_data_df.pivot_table(
+                    index=["date", "symbol"],
+                    values=["open", "high", "low", "close", "volume"],
+                )
+                # Reset index to flatten the DataFrame
+                final_df = daily_data_pivot.reset_index()
+                return final_df
+
+            # Map stock IDs to symbols in the indicators data
+            indicators_df["symbol"] = indicators_df["stock_id"].map(stock_id_to_symbol)
+            indicators_df.drop(columns=["id", "stock_id"], inplace=True)
+            indicators_df["date"] = pd.to_datetime(indicators_df["date"])
+
+            # Pivot the indicators DataFrame
+            indicators_pivot = indicators_df.pivot_table(
+                index=["date", "symbol"], columns="indicator_name", values="value"
+            ).reset_index()
+
+            # Merge daily data with indicators on date and symbol
+            merged_df = pd.merge(
+                daily_data_df,
+                indicators_pivot,
+                on=["date", "symbol"],
+                how="left",
+            )
+
+            # Optional: Sort the DataFrame
+            merged_df.sort_values(by=["symbol", "date"], inplace=True)
+            merged_df.reset_index(drop=True, inplace=True)
+
+            return merged_df
+
+    # ---------------------- Example Usage ----------------------
 
 
 def main():
