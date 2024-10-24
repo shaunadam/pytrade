@@ -327,7 +327,7 @@ class DataService:
                 repository.bulk_upsert_daily_data(all_daily_data)
 
                 # Aggregate and update weekly data
-                self.aggregate_and_update_weekly_data()
+                self.aggregate_and_update_weekly_data(symbols, start_date, end_date)
 
                 self.progress_tracker.set_progress(
                     100, "All stocks updated successfully"
@@ -339,13 +339,23 @@ class DataService:
                 )
                 raise
 
-    def aggregate_and_update_weekly_data(self):
+    def aggregate_and_update_weekly_data(
+        self, symbols: Union[str, List[str]], start_date: str, end_date: str
+    ):
         """
         Aggregates daily data into weekly data and updates the weekly_data table.
+        Processes only the specified symbols and date range (adjusted to start 2 weeks earlier).
         """
+        if isinstance(symbols, str):
+            symbols = [symbols]
+
+        # Adjust start date to start 2 weeks earlier
+        adjusted_start_date = (
+            pd.to_datetime(start_date) - timedelta(days=14)
+        ).strftime("%Y-%m-%d")
+
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
-            symbols = repository.get_all_symbols()
 
             for symbol in symbols:
                 stock = repository.get_stock_by_symbol(symbol)
@@ -355,17 +365,25 @@ class DataService:
 
                 daily_data = (
                     session.query(DailyData)
-                    .filter(DailyData.stock_id == stock.id)
+                    .filter(
+                        DailyData.stock_id == stock.id,
+                        DailyData.date >= adjusted_start_date,
+                        DailyData.date <= end_date,
+                    )
                     .order_by(DailyData.date)
                     .all()
                 )
 
                 if not daily_data:
-                    logger.warning(f"No daily data for {symbol}. Skipping.")
+                    logger.warning(
+                        f"No daily data for {symbol} in the date range. Skipping."
+                    )
                     continue
 
                 df = pd.DataFrame([d.__dict__ for d in daily_data])
-                df = df.drop(columns=["_sa_instance_state"])
+                df = df.drop(
+                    columns=["id", "stock_id", "_sa_instance_state"], errors="ignore"
+                )
                 df["date"] = pd.to_datetime(df["date"])
                 df.set_index("date", inplace=True)
 
@@ -373,7 +391,7 @@ class DataService:
 
                 # Prepare records for bulk upsert
                 weekly_records = []
-                for _, row in weekly_df.iterrows():
+                for idx, row in weekly_df.iterrows():
                     weekly_records.append(
                         {
                             "stock_id": stock.id,
@@ -506,111 +524,115 @@ class DataService:
                 )
                 raise
 
-    def get_stock_data_with_indicators(
-        self,
-        symbols: Union[str, List[str]],
-        start_date: str,
-        end_date: str,
-        time_frame: str = "daily",
-    ) -> pd.DataFrame:
+        def get_stock_data_with_indicators(
+            self,
+            symbols: Union[str, List[str]],
+            start_date: str,
+            end_date: str,
+            time_frame: str = "daily",
+        ) -> pd.DataFrame:
 
-        if isinstance(symbols, str):
-            symbols = [symbols]
+            if isinstance(symbols, str):
+                symbols = [symbols]
 
-        with self.db_manager.session_scope() as session:
-            repository = StockRepository(session)
+            with self.db_manager.session_scope() as session:
+                repository = StockRepository(session)
 
-            # Fetch all stocks matching the symbols
-            stocks = session.query(Stock).filter(Stock.symbol.in_(symbols)).all()
-            if not stocks:
-                logger.warning("No stocks found for the given symbols.")
-                return pd.DataFrame()
+                # Fetch all stocks matching the symbols
+                stocks = session.query(Stock).filter(Stock.symbol.in_(symbols)).all()
+                if not stocks:
+                    logger.warning("No stocks found for the given symbols.")
+                    return pd.DataFrame()
 
-            stock_id_to_symbol = {stock.id: stock.symbol for stock in stocks}
-            stock_ids = list(stock_id_to_symbol.keys())
+                stock_id_to_symbol = {stock.id: stock.symbol for stock in stocks}
+                stock_ids = list(stock_id_to_symbol.keys())
 
-            if time_frame == "weekly":
-                data_query = (
-                    session.query(WeeklyData)
-                    .filter(
-                        WeeklyData.stock_id.in_(stock_ids),
-                        WeeklyData.week_start_date >= start_date,
-                        WeeklyData.week_start_date <= end_date,
+                if time_frame == "weekly":
+                    data_query = (
+                        session.query(WeeklyData)
+                        .filter(
+                            WeeklyData.stock_id.in_(stock_ids),
+                            WeeklyData.week_start_date >= start_date,
+                            WeeklyData.week_start_date <= end_date,
+                        )
+                        .order_by(WeeklyData.week_start_date)
                     )
-                    .order_by(WeeklyData.week_start_date)
-                )
-                date_field = "week_start_date"
-            else:
-                data_query = (
-                    session.query(DailyData)
-                    .filter(
-                        DailyData.stock_id.in_(stock_ids),
-                        DailyData.date >= start_date,
-                        DailyData.date <= end_date,
+                    date_field = "week_start_date"
+                else:
+                    data_query = (
+                        session.query(DailyData)
+                        .filter(
+                            DailyData.stock_id.in_(stock_ids),
+                            DailyData.date >= start_date,
+                            DailyData.date <= end_date,
+                        )
+                        .order_by(DailyData.date)
                     )
-                    .order_by(DailyData.date)
+                    date_field = "date"
+
+                data_df = pd.read_sql(data_query.statement, session.bind)
+
+                if data_df.empty:
+                    logger.warning("No data found for the given date range.")
+                    return pd.DataFrame()
+
+                # Map stock IDs to symbols in the data
+                data_df["symbol"] = data_df["stock_id"].map(stock_id_to_symbol)
+                data_df.drop(columns=["id", "stock_id"], inplace=True)
+                data_df[date_field] = pd.to_datetime(data_df[date_field])
+
+                # Fetch technical indicators in bulk
+                indicators_query = (
+                    session.query(TechnicalIndicator)
+                    .filter(
+                        TechnicalIndicator.stock_id.in_(stock_ids),
+                        TechnicalIndicator.date >= start_date,
+                        TechnicalIndicator.date <= end_date,
+                        TechnicalIndicator.time_frame == time_frame,
+                    )
+                    .order_by(TechnicalIndicator.date)
                 )
-                date_field = "date"
+                indicators_df = pd.read_sql(indicators_query.statement, session.bind)
 
-            data_df = pd.read_sql(data_query.statement, session.bind)
+                if indicators_df.empty:
+                    logger.warning(
+                        "No technical indicators found for the given date range."
+                    )
+                    # Proceed without indicators
 
-            if data_df.empty:
-                logger.warning("No data found for the given date range.")
-                return pd.DataFrame()
+                    # Pivot the DataFrame to have dates as index and symbols as columns
+                    data_pivot = data_df.pivot_table(
+                        index=[date_field, "symbol"],
+                        values=["open", "high", "low", "close", "volume"],
+                    )
+                    # Reset index to flatten the DataFrame
+                    final_df = data_pivot.reset_index()
+                    return final_df
 
-            # Map stock IDs to symbols in the data
-            data_df["symbol"] = data_df["stock_id"].map(stock_id_to_symbol)
-            data_df.drop(columns=["id", "stock_id"], inplace=True)
-            data_df[date_field] = pd.to_datetime(data_df[date_field])
-
-            # Fetch technical indicators in bulk
-            indicators_query = (
-                session.query(TechnicalIndicator)
-                .filter(
-                    TechnicalIndicator.stock_id.in_(stock_ids),
-                    TechnicalIndicator.date >= start_date,
-                    TechnicalIndicator.date <= end_date,
-                    TechnicalIndicator.time_frame == time_frame,
+                # Map stock IDs to symbols in the indicators data
+                indicators_df["symbol"] = indicators_df["stock_id"].map(
+                    stock_id_to_symbol
                 )
-                .order_by(TechnicalIndicator.date)
-            )
-            indicators_df = pd.read_sql(indicators_query.statement, session.bind)
+                indicators_df.drop(columns=["id", "stock_id"], inplace=True)
+                indicators_df[date_field] = pd.to_datetime(indicators_df[date_field])
 
-            if indicators_df.empty:
-                logger.warning(
-                    "No technical indicators found for the given date range."
-                )
-                # Proceed without indicators
-
-                # Pivot the DataFrame to have dates as index and symbols as columns
-                data_pivot = data_df.pivot_table(
+                # Pivot the indicators DataFrame
+                indicators_pivot = indicators_df.pivot_table(
                     index=[date_field, "symbol"],
-                    values=["open", "high", "low", "close", "volume"],
+                    columns="indicator_name",
+                    values="value",
+                ).reset_index()
+
+                # Merge data with indicators on date and symbol
+                merged_df = pd.merge(
+                    data_df,
+                    indicators_pivot,
+                    on=[date_field, "symbol"],
+                    how="left",
                 )
-                # Reset index to flatten the DataFrame
-                final_df = data_pivot.reset_index()
-                return final_df
 
-            # Map stock IDs to symbols in the indicators data
-            indicators_df["symbol"] = indicators_df["stock_id"].map(stock_id_to_symbol)
-            indicators_df.drop(columns=["id", "stock_id"], inplace=True)
-            indicators_df[date_field] = pd.to_datetime(indicators_df[date_field])
+                # Optional: Sort the DataFrame
+                merged_df.sort_values(by=["symbol", date_field], inplace=True)
+                merged_df.reset_index(drop=True, inplace=True)
 
-            # Pivot the indicators DataFrame
-            indicators_pivot = indicators_df.pivot_table(
-                index=[date_field, "symbol"], columns="indicator_name", values="value"
-            ).reset_index()
-
-            # Merge data with indicators on date and symbol
-            merged_df = pd.merge(
-                data_df,
-                indicators_pivot,
-                on=[date_field, "symbol"],
-                how="left",
-            )
-
-            # Optional: Sort the DataFrame
-            merged_df.sort_values(by=["symbol", date_field], inplace=True)
-            merged_df.reset_index(drop=True, inplace=True)
-
-            return merged_df
+                return merged_df

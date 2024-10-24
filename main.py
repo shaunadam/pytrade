@@ -121,7 +121,7 @@ def run_screener(config_name):
         logger.error(f"Error running screener '{config_name}': {str(e)}")
 
 
-# update_data()
+update_data()
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TSX Stock Analysis Tool")
     parser.add_argument("--update", action="store_true", help="Update stock data")

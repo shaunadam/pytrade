@@ -18,10 +18,4 @@
 **Status**
 - Weekly data is built from daily. Needs to respect the symbols and date range being refreshed (instead of recomputing for all symbols and dates), worked great for initial population but it's slow on update. Need to offset the start date like was done for daily indicators.
 
-- daily indicators insertion failed.
-
-[SQL: DELETE FROM technical_indicators WHERE technical_indicators.stock_id = ? AND technical_indicators.date >= ? AND technical_indicators.time_frame = ?]
-[parameters: (1628, '2023-10-11', 'daily')]
-(Background on this error at: https://sqlalche.me/e/20/e3q8)
-
 - haven't tested strategies yet.
