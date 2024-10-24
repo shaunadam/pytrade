@@ -1,3 +1,5 @@
+# src/database/init_db.py
+
 from sqlalchemy import (
     create_engine,
     Column,
@@ -10,8 +12,7 @@ from sqlalchemy import (
     Index,
     UniqueConstraint,
 )
-from sqlalchemy.orm import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import declarative_base, relationship
 import os
 
 Base = declarative_base()
@@ -26,6 +27,9 @@ class Stock(Base):
     daily_data = relationship("DailyData", back_populates="stock")
     weekly_data = relationship("WeeklyData", back_populates="stock")
     technical_indicators = relationship("TechnicalIndicator", back_populates="stock")
+    weekly_technical_indicators = relationship(
+        "WeeklyTechnicalIndicator", back_populates="stock"
+    )  # New relationship
 
 
 class DailyData(Base):
@@ -83,6 +87,28 @@ class TechnicalIndicator(Base):
             name="uix_stock_date_indicator",
         ),
         Index("idx_technical_indicators_stock_date", "stock_id", "date"),
+    )
+
+
+class WeeklyTechnicalIndicator(Base):
+    __tablename__ = "weekly_technical_indicators"
+    id = Column(Integer, primary_key=True)
+    stock_id = Column(
+        Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False
+    )
+    date = Column(Date, nullable=False)
+    indicator_name = Column(String, nullable=False)
+    value = Column(Float, nullable=False)
+    stock = relationship("Stock", back_populates="weekly_technical_indicators")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "stock_id",
+            "date",
+            "indicator_name",
+            name="uix_weekly_stock_date_indicator",
+        ),
+        Index("idx_weekly_technical_indicators_stock_date", "stock_id", "date"),
     )
 
 

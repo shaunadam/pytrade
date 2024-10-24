@@ -36,10 +36,10 @@ def macd(data, fast_period=12, slow_period=26, signal_period=9, time_frame="dail
     """
     Calculate Moving Average Convergence Divergence (MACD)
     """
-    if time_frame == "weekly":
-        fast_period = max(1, fast_period // 5)
-        slow_period = max(1, slow_period // 5)
-        signal_period = max(1, signal_period // 5)
+    # if time_frame == "weekly":
+    #    fast_period = max(1, fast_period // 5)
+    #    slow_period = max(1, slow_period // 5)
+    #    signal_period = max(1, signal_period // 5)
     fast_ema = ema(data, fast_period, time_frame=time_frame)
     slow_ema = ema(data, slow_period, time_frame=time_frame)
     macd_line = fast_ema - slow_ema

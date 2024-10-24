@@ -9,7 +9,13 @@ import yfinance as yf
 from sqlalchemy import create_engine, select, text, or_
 from sqlalchemy.orm import sessionmaker, Session
 from src.analysis.indicators import sma, ema, rsi, macd, bollinger_bands
-from src.database.init_db import Stock, DailyData, WeeklyData, TechnicalIndicator
+from src.database.init_db import (
+    Stock,
+    DailyData,
+    WeeklyData,
+    TechnicalIndicator,
+    WeeklyTechnicalIndicator,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.ERROR)
@@ -405,7 +411,6 @@ class DataService:
 
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
-
             try:
                 for i, symbol in enumerate(symbols):
                     stock = repository.get_stock_by_symbol(symbol)
@@ -426,6 +431,7 @@ class DataService:
                             .all()
                         )
                         date_field = "week_start_date"
+                        indicator_model = WeeklyTechnicalIndicator
                     else:
                         data_query = (
                             session.query(DailyData)
@@ -437,6 +443,7 @@ class DataService:
                             .all()
                         )
                         date_field = "date"
+                        indicator_model = TechnicalIndicator
 
                     if not data_query:
                         logger.warning(f"No data found for {symbol}. Skipping.")
@@ -455,32 +462,28 @@ class DataService:
                     )
 
                     # Delete existing indicators for the time_frame
-                    repository.session.query(TechnicalIndicator).filter(
-                        TechnicalIndicator.stock_id == stock.id,
-                        TechnicalIndicator.date >= start_date_with_buffer,
-                        TechnicalIndicator.time_frame == time_frame,
-                    ).delete()
+                    repository.session.query(indicator_model).filter(
+                        indicator_model.stock_id == stock.id,
+                        indicator_model.date >= start_date_with_buffer,
+                    ).delete(synchronize_session=False)
                     repository.session.commit()
 
                     # Insert new indicators
-                    indicator_records = []
-                    for date, row in indicators.iterrows():
-                        for indicator_name, value in row.items():
-                            if pd.notna(value):
-                                indicator_records.append(
-                                    {
-                                        "stock_id": stock.id,
-                                        "date": date.date(),
-                                        "indicator_name": indicator_name,
-                                        "value": float(value),
-                                        "time_frame": time_frame,
-                                    }
-                                )
+                    indicator_records = [
+                        {
+                            "stock_id": stock.id,
+                            "date": date.date(),
+                            "indicator_name": name,
+                            "value": float(value),
+                        }
+                        for date, row in indicators.iterrows()
+                        for name, value in row.items()
+                        if pd.notna(value)
+                    ]
 
-                    # Bulk insert indicators
                     if indicator_records:
                         repository.session.bulk_insert_mappings(
-                            TechnicalIndicator, indicator_records
+                            indicator_model, indicator_records
                         )
                         repository.session.commit()
 

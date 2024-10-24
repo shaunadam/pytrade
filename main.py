@@ -13,38 +13,37 @@ logger = logging.getLogger(__name__)
 
 def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
     """
-    Updates stock data and recalculates technical indicators.
+    Updates stock data and recalculates technical indicators for both daily and weekly time frames.
 
     Args:
         symbols (list, optional): List of stock symbols to update. Defaults to None.
         start_date (str, optional): Start date for fetching data. Defaults to START_DATE.
         end_date (str, optional): End date for fetching data. Defaults to END_DATE.
     """
-    data_service = DataService(DB_PATH)  # Instantiate DataService
-    if symbols:
-        try:
-            logger.info(f"Updating data for symbols: {symbols}")
-            data_service.update_all_stocks(symbols, start_date, end_date)
-            data_service.update_indicators(
-                symbols, start_date, end_date, time_frame="daily"
-            )
-            logger.info(
-                "Data update and indicator recalculation completed successfully."
-            )
-        except Exception as e:
-            logger.error(f"Error updating stocks: {str(e)}")
-    else:
-        try:
-            logger.info("Updating data for all TSX symbols.")
-            data_service.update_all_stocks(TSX_SYMBOLS, start_date, end_date)
-            data_service.update_indicators(
-                TSX_SYMBOLS, start_date, end_date, time_frame="daily"
-            )
-            logger.info(
-                "Data update and indicator recalculation for all TSX symbols completed successfully."
-            )
-        except Exception as e:
-            logger.error(f"Error updating stocks: {str(e)}")
+    data_service = DataService(DB_PATH)
+    target_symbols = symbols if symbols else TSX_SYMBOLS
+
+    try:
+        logger.info(f"Updating data for symbols: {target_symbols}")
+        data_service.update_all_stocks(target_symbols, start_date, end_date)
+
+        # Update Daily Indicators
+        logger.info("Recalculating daily technical indicators.")
+        data_service.update_indicators(
+            target_symbols, start_date, end_date, time_frame="daily"
+        )
+
+        # Update Weekly Indicators
+        logger.info("Recalculating weekly technical indicators.")
+        data_service.update_indicators(
+            target_symbols, start_date, end_date, time_frame="weekly"
+        )
+
+        logger.info(
+            "Data update and indicator recalculation completed successfully for both daily and weekly time frames."
+        )
+    except Exception as e:
+        logger.error(f"Error updating stocks: {str(e)}")
 
 
 def recalculate_indicators(
@@ -99,7 +98,7 @@ def run_screener(config_name):
     Runs the screener with the specified configuration.
 
     Args:
-        config_name (str): Path to the screener configuration file.
+        config_name (str): Path to screener configuration file
     """
     data_service = DataService(DB_PATH)  # Instantiate DataService
     screener = Screener(config_name)  # Pass config path
