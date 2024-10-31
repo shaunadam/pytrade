@@ -30,10 +30,10 @@ def register_utilities_callbacks(app):
             # Start the download process in a separate thread
             threading.Thread(
                 target=lambda: (
-                    DataService(DB_PATH).update_all_stocks(
+                    DataService(DATABASE_URL).update_all_stocks(
                         TSX_SYMBOLS, start_date, end_date
                     ),
-                    DataService(DB_PATH).update_indicators(
+                    DataService(DATABASE_URL).update_indicators(
                         TSX_SYMBOLS, start_date, end_date, time_frame="daily"
                     ),
                 ),

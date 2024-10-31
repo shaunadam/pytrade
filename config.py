@@ -5,6 +5,15 @@ import requests
 # Database
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "stocks.db")
 
+DB_USER = "shaun"
+DB_PASSWORD = "ss341122"
+DB_HOST = "localhost"  # Use 'db' if using Docker Compose; otherwise, 'localhost'
+DB_PORT = "5432"
+DB_NAME = "pytrade"
+
+# SQLAlchemy Database URL
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+
 
 # Data
 def load_tsx_symbols():
@@ -23,9 +32,9 @@ def load_tsx_symbols():
     return symbols
 
 
-# TSX_SYMBOLS = load_tsx_symbols()
+TSX_SYMBOLS = load_tsx_symbols()
 # TSX_SYMBOLS = load_tsx_symbols()[0:10]
-TSX_SYMBOLS = ["SU.TO"]
+# TSX_SYMBOLS = ["SU.TO"]
 
 START_DATE = "2024-10-10"
 END_DATE = "2024-12-31"

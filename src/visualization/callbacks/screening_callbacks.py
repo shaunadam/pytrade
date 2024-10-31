@@ -151,7 +151,7 @@ def register_screening_callbacks(app):
         if not selected_screeners:
             return "Please select at least one screener.", []
 
-        data_service = DataService(DB_PATH)
+        data_service = DataService(DATABASE_URL)
         symbols = selected_stocks if selected_stocks else TSX_SYMBOLS
 
         # Fetch data once
@@ -214,7 +214,7 @@ def register_screening_callbacks(app):
 
         selected_symbol = table_data[row]["symbol"]
 
-        data_service = DataService(DB_PATH)
+        data_service = DataService(DATABASE_URL)
         df = data_service.get_stock_data_with_indicators(
             selected_symbol, START_DATE, END_DATE, time_frame="daily"
         )

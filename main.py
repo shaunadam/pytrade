@@ -1,7 +1,7 @@
 from src.data.fetcher import DataService  # Updated import
 from src.visualization.dashboard import app as dashboard_app
 from src.analysis.screener import Screener
-from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
+from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
 import pandas as pd
 import argparse
 import logging
@@ -20,7 +20,7 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
         start_date (str, optional): Start date for fetching data. Defaults to START_DATE.
         end_date (str, optional): End date for fetching data. Defaults to END_DATE.
     """
-    data_service = DataService(DB_PATH)
+    data_service = DataService(DATABASE_URL)
     target_symbols = symbols if symbols else TSX_SYMBOLS
 
     try:
@@ -58,7 +58,7 @@ def recalculate_indicators(
         end_date (str, optional): End date for recalculating indicators. Defaults to END_DATE.
         time_frame (str, optional): Time frame for indicators ('daily' or 'weekly'). Defaults to 'daily'.
     """
-    data_service = DataService(DB_PATH)  # Instantiate DataService
+    data_service = DataService(DATABASE_URL)  # Instantiate DataService
     if symbols:
         try:
             logger.info(
@@ -100,7 +100,7 @@ def run_screener(config_name):
     Args:
         config_name (str): Path to screener configuration file
     """
-    data_service = DataService(DB_PATH)  # Instantiate DataService
+    data_service = DataService(DATABASE_URL)  # Instantiate DataService
     screener = Screener(config_name)  # Pass config path
 
     logger.info(f"Running screener: {screener.config['name']}")
@@ -121,7 +121,6 @@ def run_screener(config_name):
         logger.error(f"Error running screener '{config_name}': {str(e)}")
 
 
-update_data()
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="TSX Stock Analysis Tool")
     parser.add_argument("--update", action="store_true", help="Update stock data")

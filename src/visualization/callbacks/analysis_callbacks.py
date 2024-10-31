@@ -182,7 +182,7 @@ def register_analysis_callbacks(app):
                 if delta:
                     start_date = (pd.to_datetime(end_date) - delta).date().isoformat()
 
-        data_service = DataService(DB_PATH)
+        data_service = DataService(DATABASE_URL)
         df = data_service.get_stock_data_with_indicators(
             selected_stock, start_date, end_date, time_frame="daily"
         )

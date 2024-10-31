@@ -65,3 +65,5 @@ data/processed/*
 !data/processed/.gitkeep
 test.py
 repopack-output.txt
+docker-compose.yml
+migration*.py
