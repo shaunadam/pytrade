@@ -30,12 +30,12 @@ class DatabaseManager:
     Manages the database connection and session lifecycle.
     """
 
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str) -> Session:
         self.engine = create_engine(db_path)
         self.Session = sessionmaker(bind=self.engine)
 
     @contextmanager
-    def session_scope(self) -> Session:
+    def session_scope(self):
         """
         Provides a transactional scope around a series of operations.
         """
@@ -275,7 +275,7 @@ class ProgressTracker:
             f"Progress updated to {self.update_progress}%: {self.update_message}"
         )
 
-    def get_progress(self) -> (int, str):
+    def get_progress(self) -> Union[int, str]:
         return self.update_progress, self.update_message
 
 
