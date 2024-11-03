@@ -7,6 +7,7 @@ from typing import List, Dict, Union
 import pandas as pd
 import yfinance as yf
 from sqlalchemy import create_engine, select, text, or_
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker, Session
 from src.analysis.indicators import sma, ema, rsi, macd, bollinger_bands
 from src.database.init_db import (
@@ -96,26 +97,20 @@ class StockRepository:
             logger.error(traceback.format_exc())
             raise
 
-    def bulk_upsert_weekly_data(self, weekly_data_records: List[Dict]):
-        """
-        Performs a bulk upsert of weekly stock data.
-        """
+    def bulk_upsert_weekly_data(
+        self, weekly_data_records: List[Dict], batch_size: int = 5000
+    ):
         try:
-            upsert_weekly_stmt = text(
-                """
-                INSERT INTO weekly_data (stock_id, week_start_date, open, high, low, close, volume)
-                VALUES (:stock_id, :week_start_date, :open, :high, :low, :close, :volume)
-                ON CONFLICT (stock_id, week_start_date) DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    volume = EXCLUDED.volume
-                """
-            )
-
-            self.session.execute(upsert_weekly_stmt, weekly_data_records)
-            self.session.commit()
+            weekly_data_table = WeeklyData.__table__
+            for i in range(0, len(weekly_data_records), batch_size):
+                batch = weekly_data_records[i : i + batch_size]
+                stmt = insert(weekly_data_table).values(batch)
+                update_dict = {c.name: c for c in stmt.excluded if c.name not in ["id"]}
+                upsert_stmt = stmt.on_conflict_do_update(
+                    index_elements=["stock_id", "week_start_date"], set_=update_dict
+                )
+                self.session.execute(upsert_stmt)
+            # No need to commit here; commit is handled outside
             logger.info(
                 f"Successfully upserted {len(weekly_data_records)} weekly data records"
             )
@@ -295,9 +290,6 @@ class DataService:
     def update_all_stocks(
         self, symbols: Union[str, List[str]], start_date: str, end_date: str
     ):
-        """
-        Fetches and updates daily stock data for the given symbols and date range.
-        """
         if isinstance(symbols, str):
             symbols = [symbols]
 
@@ -313,6 +305,7 @@ class DataService:
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
             all_daily_data = []
+            stock_ids = []
 
             try:
                 for i, symbol in enumerate(symbols):
@@ -330,19 +323,21 @@ class DataService:
                         symbol, symbol_data, stock.id
                     )
                     all_daily_data.extend(daily_data_records)
-
-                    stock.last_updated = datetime.now().date()
-
-                    # Commit after each stock to update last_updated
-                    session.commit()
+                    stock_ids.append(stock.id)
 
                     progress = int(50 + ((i + 1) / len(symbols)) * 50)
                     self.progress_tracker.set_progress(
                         progress, f"Processed {i+1}/{len(symbols)} stocks"
                     )
 
-                # Bulk upsert all data
+                # Bulk upsert all daily data
                 repository.bulk_upsert_daily_data(all_daily_data)
+
+                # Bulk update last_updated
+                session.query(Stock).filter(Stock.id.in_(stock_ids)).update(
+                    {Stock.last_updated: datetime.now().date()},
+                    synchronize_session=False,
+                )
 
                 # Aggregate and update weekly data
                 self.aggregate_and_update_weekly_data(symbols, start_date, end_date)
