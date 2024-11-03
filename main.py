@@ -1,8 +1,8 @@
 from src.data.fetcher import DataService  # Updated import
 from src.visualization.dashboard import app as dashboard_app
 from src.analysis.screener import Screener
-from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
-import pandas as pd
+from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
+
 import argparse
 import logging
 
@@ -134,7 +134,6 @@ if __name__ == "__main__":
         default="daily",
         help="Time frame for indicators",
     )
-    parser.add_argument("--test", action="store_true", help="Test indicators")
     parser.add_argument("--dashboard", action="store_true", help="Run the dashboard")
     parser.add_argument(
         "--screener", type=str, help="Path to screener configuration file"
@@ -154,5 +153,5 @@ if __name__ == "__main__":
         args.update or args.recalculate or args.test or args.dashboard or args.screener
     ):
         print(
-            "No action specified. Use --update, --recalculate, --test, --dashboard, or --screener"
+            "No action specified. Use --update, --recalculate, --dashboard, or --screener"
         )

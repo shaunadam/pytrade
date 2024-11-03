@@ -3,8 +3,6 @@ import json
 import requests
 
 # Database
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "stocks.db")
-
 DB_USER = "shaun"
 DB_PASSWORD = "ss341122"
 DB_HOST = "localhost"  # Use 'db' if using Docker Compose; otherwise, 'localhost'
