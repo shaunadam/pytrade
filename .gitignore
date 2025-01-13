@@ -64,6 +64,6 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 test.py
-repopack-output.txt
+repomix-output.txt
 docker-compose.yml
 migration*.py

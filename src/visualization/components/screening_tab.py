@@ -3,7 +3,7 @@ import yaml
 import dash
 from dash import dcc, html, dash_table
 import dash_bootstrap_components as dbc
-from config import DB_PATH, TSX_SYMBOLS, START_DATE
+from config import TSX_SYMBOLS, START_DATE
 from src.analysis.screener import Screener
 from src.data.fetcher import DataService
 

@@ -1,7 +1,7 @@
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 from src.data.fetcher import DataService
-from config import DB_PATH, TSX_SYMBOLS
+from config import TSX_SYMBOLS
 import dash
 import logging
 import threading

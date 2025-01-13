@@ -1,7 +1,7 @@
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from src.data.fetcher import DataService
-from config import DB_PATH, TSX_SYMBOLS, START_DATE
+from config import TSX_SYMBOLS, START_DATE
 import pandas as pd
 import dash
 import logging

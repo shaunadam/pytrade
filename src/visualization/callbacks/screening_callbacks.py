@@ -3,7 +3,7 @@ from dash import dash_table
 from src.visualization.components.screening_tab import get_available_screeners
 from src.analysis.screener import Screener
 from src.data.fetcher import DataService
-from config import DB_PATH, TSX_SYMBOLS, START_DATE, END_DATE
+from config import TSX_SYMBOLS, START_DATE, END_DATE
 import pandas as pd
 import dash
 import plotly.graph_objs as go

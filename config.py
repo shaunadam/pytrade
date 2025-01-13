@@ -35,4 +35,4 @@ TSX_SYMBOLS = load_tsx_symbols()
 # TSX_SYMBOLS = ["SU.TO"]
 
 START_DATE = "2024-10-20"
-END_DATE = "2024-12-31"
+END_DATE = "2025-12-31"

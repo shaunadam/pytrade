@@ -15,7 +15,7 @@ from src.visualization.callbacks import (
     register_screening_callbacks,
     register_utilities_callbacks,
 )
-from config import DB_PATH, TSX_SYMBOLS, START_DATE
+from config import TSX_SYMBOLS, START_DATE
 from datetime import datetime, timedelta
 import os
 

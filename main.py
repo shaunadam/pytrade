@@ -149,9 +149,7 @@ if __name__ == "__main__":
     if args.screener:
         run_screener(args.screener)
 
-    if not (
-        args.update or args.recalculate or args.test or args.dashboard or args.screener
-    ):
+    if not (args.update or args.recalculate or args.dashboard or args.screener):
         print(
             "No action specified. Use --update, --recalculate, --dashboard, or --screener"
         )
