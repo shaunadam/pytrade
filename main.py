@@ -1,5 +1,4 @@
 from src.data.fetcher import DataService  # Updated import
-from src.analysis.screener import Screener
 from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
 
 import argparse
@@ -82,34 +81,6 @@ def recalculate_indicators(
             )
         except Exception as e:
             logger.error(f"Error recalculating indicators: {str(e)}")
-
-
-def run_screener(config_name):
-    """
-    Runs the screener with the specified configuration.
-
-    Args:
-        config_name (str): Path to screener configuration file
-    """
-    data_service = DataService(DATABASE_URL)  # Instantiate DataService
-    screener = Screener(config_name)  # Pass config path
-
-    logger.info(f"Running screener: {screener.config['name']}")
-    logger.info(f"Description: {screener.config['description']}")
-
-    try:
-        results = screener.screen_data(
-            data_service.get_stock_data_with_indicators(
-                screener.config.get("symbols", TSX_SYMBOLS),
-                screener.config.get("start_date", START_DATE),
-                screener.config.get("end_date", END_DATE),
-                time_frame=screener.config.get("time_frame", "daily"),
-            )
-        )
-        logger.info("\nScreening Results:")
-        print(results.to_string(index=False))
-    except Exception as e:
-        logger.error(f"Error running screener '{config_name}': {str(e)}")
 
 
 if __name__ == "__main__":
