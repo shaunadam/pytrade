@@ -1,5 +1,4 @@
 from src.data.fetcher import DataService  # Updated import
-from src.visualization.dashboard import app as dashboard_app
 from src.analysis.screener import Screener
 from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
 
@@ -85,14 +84,6 @@ def recalculate_indicators(
             logger.error(f"Error recalculating indicators: {str(e)}")
 
 
-def run_dashboard():
-    """
-    Runs the visualization dashboard.
-    """
-    logger.info("Starting the dashboard server.")
-    dashboard_app.run_server(debug=True)
-
-
 def run_screener(config_name):
     """
     Runs the screener with the specified configuration.
@@ -134,7 +125,6 @@ if __name__ == "__main__":
         default="daily",
         help="Time frame for indicators",
     )
-    parser.add_argument("--dashboard", action="store_true", help="Run the dashboard")
     parser.add_argument(
         "--screener", type=str, help="Path to screener configuration file"
     )
@@ -144,12 +134,8 @@ if __name__ == "__main__":
         update_data()
     if args.recalculate:
         recalculate_indicators(time_frame=args.time_frame)
-    if args.dashboard:
-        run_dashboard()
     if args.screener:
         run_screener(args.screener)
 
-    if not (args.update or args.recalculate or args.dashboard or args.screener):
-        print(
-            "No action specified. Use --update, --recalculate, --dashboard, or --screener"
-        )
+    if not (args.update or args.recalculate or args.screener):
+        print("No action specified. Use --update, --recalculate, or --screener")
