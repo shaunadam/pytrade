@@ -23,6 +23,25 @@ class MACDBullishCrossScreener(BaseScreener):
         )
 
 
+class BollingerBreakoutScreener(BaseScreener):
+    def apply(self, data: pd.DataFrame) -> pd.Series:
+        return data["close"] > data["BB_Upper"]
+
+
+class GoldenCrossScreener(BaseScreener):
+    def apply(self, data: pd.DataFrame) -> pd.Series:
+        return (data["SMA50"] > data["SMA200"]) & (
+            data["SMA50"].shift(1) <= data["SMA200"].shift(1)
+        )
+
+
+class MACDHistogramExpansionScreener(BaseScreener):
+    def apply(self, data: pd.DataFrame) -> pd.Series:
+        return (data["MACD_Histogram"] > 0) & (
+            data["MACD_Histogram"] > data["MACD_Histogram"].shift(1)
+        )
+
+
 class CompositeScreener(BaseScreener):
     def __init__(self, screeners, mode="AND"):
         self.screeners = screeners

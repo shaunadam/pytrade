@@ -18,11 +18,11 @@
 ---
 
 ## 2. **Screening with Python-Only Definitions**
-1. **Remove YAML Config Approach**  
+1. **DONE: Remove YAML Config Approach**  
    - Delete the YAML screener definitions (`.yaml`) and their loader code.  
    - Convert screener logic directly into Python classes or functions.
 
-2. **Define a Pythonic Screener Interface**  
+2. **DONE: Define a Pythonic Screener Interface**  
    - For example:
      ```python
      def rsi_oversold_rebound(data, rsi_threshold=30):
@@ -30,7 +30,7 @@
      ```
    - Encapsulate “AND/OR” condition logic within the function or via function chaining.
 
-3. **Keep It Modular**  
+3. **DONE: Keep It Modular**  
    - Example:
      ```python
      def run_screeners(data, screeners=[rsi_oversold_rebound, macd_bullish_cross]):

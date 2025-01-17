@@ -172,9 +172,11 @@ class IndicatorCalculator:
             indicators["SMA12"] = sma(close_prices, 12, time_frame=time_frame)
             indicators["SMA26"] = sma(close_prices, 26, time_frame=time_frame)
             indicators["SMA50"] = sma(close_prices, 50, time_frame=time_frame)
+            indicators["SMA200"] = sma(close_prices, 200, time_frame=time_frame)
             indicators["EMA12"] = ema(close_prices, 12, time_frame=time_frame)
             indicators["EMA26"] = ema(close_prices, 26, time_frame=time_frame)
             indicators["EMA50"] = ema(close_prices, 50, time_frame=time_frame)
+            indicators["EMA200"] = ema(close_prices, 200, time_frame=time_frame)
             indicators["RSI"] = rsi(close_prices, 14, time_frame=time_frame)
 
             macd_data = macd(close_prices, time_frame=time_frame)

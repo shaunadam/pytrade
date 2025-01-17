@@ -3,9 +3,11 @@ from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
 from src.analysis.screeners import (
     RSIOversoldScreener,
     MACDBullishCrossScreener,
+    BollingerBreakoutScreener,
+    GoldenCrossScreener,
+    MACDHistogramExpansionScreener,
     CompositeScreener,
 )
-
 import argparse
 import logging
 
@@ -77,25 +79,25 @@ def preview(symbol: str = "SU.TO"):
 
 
 def run_screener(selected_screeners: list, mode: str = "AND"):
-    """
-    Runs the selected screeners and prints the filtered DataFrame.
-    """
     data_service = DataService(DATABASE_URL)
     data = data_service.get_stock_data_with_indicators(
         TSX_SYMBOLS, START_DATE, END_DATE
     )
 
-    # Map screener names to classes
     screener_mapping = {
         "rsi_oversold": RSIOversoldScreener(threshold=30),
         "macd_bullish": MACDBullishCrossScreener(),
+        "bollinger_breakout": BollingerBreakoutScreener(),
+        "golden_cross": GoldenCrossScreener(),
+        "macd_histogram_expansion": MACDHistogramExpansionScreener(),
     }
+    if "all" in selected_screeners:
+        active_screeners = list(screener_mapping.values())
+    else:
+        active_screeners = [screener_mapping[name] for name in selected_screeners]
 
-    # Initialize the selected screeners
-    active_screeners = [screener_mapping[name] for name in selected_screeners]
-
-    # Apply the composite screener
     combined_screener = CompositeScreener(active_screeners, mode=mode)
+
     screened_data = data[combined_screener.apply(data)]
     print(screened_data)
 
@@ -128,7 +130,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--preview",
         type=str,
-        default="SU.TO",
     )
     args = parser.parse_args()
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
         run_screener(selected_screeners=args.screener, mode=args.mode)
     if args.preview:
         preview(args.preview)
-    if not (args.update or args.recalculate or args.screener or ags.prevew):
+    if not (args.update or args.recalculate or args.screener or args.preview):
         print(
             "No action specified. Use --update, --recalculate, preview, or --screener."
         )
