@@ -1,16 +1,16 @@
 # Project To-Do Overview
 
 ## 1. **Project Restructure**
-1. **Remove Dash/Plotly & Unused Files**  
+1. **DONE: Remove Dash/Plotly & Unused Files**  
    - Eliminate the entire dashboard and callback logic.  
    - Delete or comment out any modules purely supporting Dash (callbacks, layout components, etc.).  
    - Prune files that are no longer necessary (e.g., YAML screener configs, leftover assets).
 
-2. **Simplify Folder Structure**  
+2. **DONE: Simplify Folder Structure**  
    - Consider collapsing the `visualization` directory if you plan to generate only simple HTML/plots without an interactive framework.  
    - Combine or rename modules as needed (for instance, unify data fetch and indicator logic into fewer classes).
 
-3. **Improve Code Traceability**  
+3. **DONE: Improve Code Traceability**  
    - Review each class (`DataService`, `DatabaseManager`, etc.) to confirm it’s really needed.  
    - Keep common functionality (like “screeners” or “indicator calculations”) in a single, clear module.  
    - Avoid partial duplication of logic.
