@@ -1,5 +1,10 @@
-from src.data.fetcher import DataService  # Updated import path
+from src.data.fetcher import DataService
 from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
+from src.analysis.screeners import (
+    RSIOversoldScreener,
+    MACDBullishCrossScreener,
+    CompositeScreener,
+)
 
 import argparse
 import logging
@@ -32,10 +37,7 @@ def update_data(symbols: list = None, start_date=START_DATE, end_date=END_DATE):
             target_symbols, start_date, end_date, time_frame="weekly"
         )
 
-        logger.info(
-            "Data update and indicator recalculation completed successfully "
-            "for both daily and weekly time frames."
-        )
+        logger.info("Data update and indicator recalculation completed successfully.")
     except Exception as e:
         logger.error(f"Error updating stocks: {str(e)}")
 
@@ -68,12 +70,28 @@ def recalculate_indicators(
         logger.error(f"Error recalculating indicators: {str(e)}")
 
 
-def run_screener(config_path: str):
+def run_screener(selected_screeners: list, mode: str = "AND"):
     """
-    Placeholder for a screener function.
+    Runs the selected screeners and prints the filtered DataFrame.
     """
-    logger.info(f"Running screener using config file: {config_path}")
-    # Implementation depends on your approach in the future.
+    data_service = DataService(DATABASE_URL)
+    data = data_service.get_stock_data_with_indicators(
+        TSX_SYMBOLS, START_DATE, END_DATE
+    )
+
+    # Map screener names to classes
+    screener_mapping = {
+        "rsi_oversold": RSIOversoldScreener(threshold=30),
+        "macd_bullish": MACDBullishCrossScreener(),
+    }
+
+    # Initialize the selected screeners
+    active_screeners = [screener_mapping[name] for name in selected_screeners]
+
+    # Apply the composite screener
+    combined_screener = CompositeScreener(active_screeners, mode=mode)
+    screened_data = data[combined_screener.apply(data)]
+    print(screened_data)
 
 
 if __name__ == "__main__":
@@ -90,7 +108,16 @@ if __name__ == "__main__":
         help="Time frame for indicators",
     )
     parser.add_argument(
-        "--screener", type=str, help="Path to screener configuration file"
+        "--screener",
+        nargs="+",
+        help="List of screeners to run (e.g., rsi_oversold macd_bullish)",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["AND", "OR"],
+        default="AND",
+        help="Combine screeners with AND/OR logic",
     )
     args = parser.parse_args()
 
@@ -99,7 +126,6 @@ if __name__ == "__main__":
     if args.recalculate:
         recalculate_indicators(time_frame=args.time_frame)
     if args.screener:
-        run_screener(args.screener)
-
+        run_screener(selected_screeners=args.screener, mode=args.mode)
     if not (args.update or args.recalculate or args.screener):
         print("No action specified. Use --update, --recalculate, or --screener.")
