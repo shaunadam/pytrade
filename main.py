@@ -70,6 +70,12 @@ def recalculate_indicators(
         logger.error(f"Error recalculating indicators: {str(e)}")
 
 
+def preview(symbol: str = "SU.TO"):
+    data_service = DataService(DATABASE_URL)
+    data = data_service.get_stock_data_with_indicators(symbol, START_DATE, END_DATE)
+    print(data)
+
+
 def run_screener(selected_screeners: list, mode: str = "AND"):
     """
     Runs the selected screeners and prints the filtered DataFrame.
@@ -119,6 +125,11 @@ if __name__ == "__main__":
         default="AND",
         help="Combine screeners with AND/OR logic",
     )
+    parser.add_argument(
+        "--preview",
+        type=str,
+        default="SU.TO",
+    )
     args = parser.parse_args()
 
     if args.update:
@@ -127,5 +138,9 @@ if __name__ == "__main__":
         recalculate_indicators(time_frame=args.time_frame)
     if args.screener:
         run_screener(selected_screeners=args.screener, mode=args.mode)
-    if not (args.update or args.recalculate or args.screener):
-        print("No action specified. Use --update, --recalculate, or --screener.")
+    if args.preview:
+        preview(args.preview)
+    if not (args.update or args.recalculate or args.screener or ags.prevew):
+        print(
+            "No action specified. Use --update, --recalculate, preview, or --screener."
+        )
