@@ -148,7 +148,7 @@ class StockDataFetcher:
                 end=end_date,
                 group_by="ticker" if isinstance(symbols, list) else None,
                 threads=True,
-                show_errors=False,
+                # show_errors=False, #github says this works, it doesn't.
             )
             return data
         except Exception as e:
