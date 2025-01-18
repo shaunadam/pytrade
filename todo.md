@@ -1,11 +1,6 @@
 # Project To-Do Overview
 
-## 2. **Develop screeners in python**
-1. **Improve compositescreener so add flexibility (and/or nested combinations)**
-   - Need to abstract the import out of main.py so I don't have to keep adjusting it. Own file?
----
-
-## 3. **Generate a Simple Report (HTML/Static Plots)**
+## 1. **Generate a Simple Report (HTML/Static Plots)**
 1. **Create a Summary Report**  
    - For each screener, show a table of matching symbols.  
    - Possibly include overall stats (e.g., how many tickers passed each screener).  
@@ -18,9 +13,8 @@
 3. **Combine Multiple Screeners**  
    - If you run more than one screener, produce separate sections or tables in the same report.
 
----
 
-## 4. **Basic Backtesting**
+## 2. **Basic Backtesting**
 1. **Implement Simple Buy/Sell Logic**  
    - Example: “buy when RSI < 30, sell when RSI > 50.”  
    - Track trade P/L and final returns.
@@ -38,23 +32,4 @@
 
 ---
 
-## 5. **Optimize Query Performance**
-1. **Investigate Slow Updates**  
-   - Profile indicator updates (are we doing row-by-row inserts?).  
-   - Check transaction commit frequency and possibly use batch inserts.
-
-2. **Vectorize Calculations**  
-   - Ensure indicator calculations use vectorized pandas/NumPy (avoid Python loops).
-
-3. **Query Tuning**  
-   - Limit data fetching to only the needed date range.  
-   - Validate indexes on critical columns in PostgreSQL.
-
-4. **Potential Timeseries Libraries**  
-   - Consider solutions like Polars or DuckDB for partial analytics.  
-   - Cache recently fetched data in DataFrames to avoid repeated queries.
-
----
-
-## 6. **(Future) Containerization / Docker Compose**
-1.
+## 3. **(Future) Containerization / Docker Compose**

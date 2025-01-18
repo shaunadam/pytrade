@@ -32,7 +32,7 @@ def load_tsx_symbols():
 
 TSX_SYMBOLS = load_tsx_symbols()
 # TSX_SYMBOLS = load_tsx_symbols()[0:10]
-# TSX_SYMBOLS = ["SU.TO"]
+# TSX_SYMBOLS = ["SU.TO", "ABX.TO"]
 
-START_DATE = "2025-01-14"
+START_DATE = "2025-01-01"
 END_DATE = "2025-12-31"

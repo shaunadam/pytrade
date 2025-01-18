@@ -6,7 +6,7 @@ from typing import List, Dict, Union
 
 import pandas as pd
 import yfinance as yf
-from sqlalchemy import create_engine, select, text, or_
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -25,26 +25,17 @@ from src.database.init_db import (
     WeeklyTechnicalIndicator,
 )
 
-# Configure logging
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------- Database Layer ----------------------
 class DatabaseManager:
-    """
-    Manages the database connection and session lifecycle.
-    """
-
     def __init__(self, db_path: str):
         self.engine = create_engine(db_path)
         self.Session = sessionmaker(bind=self.engine)
 
     @contextmanager
     def session_scope(self):
-        """
-        Provides a transactional scope around a series of operations.
-        """
         session = self.Session()
         try:
             yield session
@@ -59,10 +50,6 @@ class DatabaseManager:
 
 
 class StockRepository:
-    """
-    Encapsulates CRUD operations for Stock, DailyData, WeeklyData, and TechnicalIndicator models.
-    """
-
     def __init__(self, session: Session):
         self.session = session
 
@@ -71,30 +58,35 @@ class StockRepository:
 
     def add_stock(self, stock: Stock):
         self.session.add(stock)
-        self.session.flush()  # To assign an ID
+        self.session.flush()
 
-    def bulk_upsert_daily_data(self, daily_data_records: List[Dict]):
-        """
-        Performs a bulk upsert of daily stock data.
-        """
+    #
+    # 1) Updated daily data upsert: chunked approach using PostgreSQL's
+    #    ON CONFLICT DO UPDATE. Make sure you have a unique constraint on (stock_id, date).
+    #
+    def bulk_upsert_daily_data(
+        self, daily_data_records: List[Dict], batch_size: int = 5000
+    ):
+        if not daily_data_records:
+            return
         try:
-            upsert_daily_stmt = text(
-                """
-                INSERT INTO daily_data (stock_id, date, open, high, low, close, volume)
-                VALUES (:stock_id, :date, :open, :high, :low, :close, :volume)
-                ON CONFLICT (stock_id, date) DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    volume = EXCLUDED.volume
-                """
-            )
+            daily_data_table = DailyData.__table__
+            for i in range(0, len(daily_data_records), batch_size):
+                batch = daily_data_records[i : i + batch_size]
+                stmt = insert(daily_data_table).values(batch)
+                # Exclude ID from the update dict
+                update_dict = {c.name: c for c in stmt.excluded if c.name not in ["id"]}
+                upsert_stmt = stmt.on_conflict_do_update(
+                    index_elements=[
+                        "stock_id",
+                        "date",
+                    ],  # must match your unique constraint
+                    set_=update_dict,
+                )
+                self.session.execute(upsert_stmt)
 
-            self.session.execute(upsert_daily_stmt, daily_data_records)
-            self.session.commit()
             logger.info(
-                f"Successfully upserted {len(daily_data_records)} daily data records"
+                f"Successfully upserted {len(daily_data_records)} daily data records."
             )
         except Exception as e:
             self.session.rollback()
@@ -102,12 +94,14 @@ class StockRepository:
             logger.error(traceback.format_exc())
             raise
 
+    #
+    # 2) Weekly data upsert is already using chunked approach. We keep this.
+    #
     def bulk_upsert_weekly_data(
         self, weekly_data_records: List[Dict], batch_size: int = 5000
     ):
-        """
-        Performs a bulk upsert of weekly stock data.
-        """
+        if not weekly_data_records:
+            return
         try:
             weekly_data_table = WeeklyData.__table__
             for i in range(0, len(weekly_data_records), batch_size):
@@ -118,8 +112,9 @@ class StockRepository:
                     index_elements=["stock_id", "week_start_date"], set_=update_dict
                 )
                 self.session.execute(upsert_stmt)
+
             logger.info(
-                f"Successfully upserted {len(weekly_data_records)} weekly data records"
+                f"Successfully upserted {len(weekly_data_records)} weekly data records."
             )
         except Exception as e:
             self.session.rollback()
@@ -131,12 +126,7 @@ class StockRepository:
         return [stock.symbol for stock in self.session.query(Stock.symbol).all()]
 
 
-# ---------------------- Fetching Layer ----------------------
 class StockDataFetcher:
-    """
-    Responsible for fetching stock data from external sources like yfinance.
-    """
-
     @staticmethod
     def fetch_stock_data(
         symbols: Union[str, List[str]], start_date: str, end_date: str
@@ -148,7 +138,6 @@ class StockDataFetcher:
                 end=end_date,
                 group_by="ticker" if isinstance(symbols, list) else None,
                 threads=True,
-                # show_errors=False, #github says this works, it doesn't.
             )
             return data
         except Exception as e:
@@ -157,12 +146,7 @@ class StockDataFetcher:
             return pd.DataFrame()
 
 
-# ---------------------- Indicator Calculation Layer ----------------------
 class IndicatorCalculator:
-    """
-    Calculates technical indicators.
-    """
-
     @staticmethod
     def calculate_indicators(
         close_prices: pd.Series, time_frame="daily"
@@ -173,10 +157,12 @@ class IndicatorCalculator:
             indicators["SMA26"] = sma(close_prices, 26, time_frame=time_frame)
             indicators["SMA50"] = sma(close_prices, 50, time_frame=time_frame)
             indicators["SMA200"] = sma(close_prices, 200, time_frame=time_frame)
+
             indicators["EMA12"] = ema(close_prices, 12, time_frame=time_frame)
             indicators["EMA26"] = ema(close_prices, 26, time_frame=time_frame)
             indicators["EMA50"] = ema(close_prices, 50, time_frame=time_frame)
             indicators["EMA200"] = ema(close_prices, 200, time_frame=time_frame)
+
             indicators["RSI"] = rsi(close_prices, 14, time_frame=time_frame)
 
             macd_data = macd(close_prices, time_frame=time_frame)
@@ -196,27 +182,18 @@ class IndicatorCalculator:
             raise
 
 
-# ---------------------- Main Orchestrator ----------------------
 class DataService:
-    """
-    Coordinates database operations, data fetching, and indicator calculations.
-    """
-
     def __init__(self, db_path: str):
         self.db_manager = DatabaseManager(db_path)
         self.indicator_calc = IndicatorCalculator()
 
-    # ----------------------------------------------------------------------
-    # The following private methods replace the old DataProcessor class.
-    # ----------------------------------------------------------------------
-
+    #
+    # Helper: Convert the downloaded raw DataFrame into a list-of-dicts
+    # for daily data, with columns we care about.
+    #
     def _process_symbol_data(
         self, symbol: str, data: pd.DataFrame, stock_id: int
     ) -> List[Dict]:
-        """
-        Cleans and normalizes raw symbol data from yfinance into a list of records
-        suitable for insertion into the daily_data table.
-        """
         try:
             daily_data = data.reset_index()
             daily_data["stock_id"] = stock_id
@@ -230,22 +207,39 @@ class DataService:
                     "Volume": "volume",
                 }
             )
+            # We don't need "Adj Close" if present
             daily_data = daily_data.drop(columns=["Adj Close"], errors="ignore")
+
+            # Drop any rows that are entirely NaN
             daily_data = daily_data.dropna()
+
             daily_data["date"] = pd.to_datetime(daily_data["date"]).dt.date
+
             return daily_data.to_dict("records")
         except Exception as e:
             logger.error(f"Error processing data for {symbol}: {str(e)}")
             logger.error(traceback.format_exc())
             raise
 
-    def _aggregate_weekly_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Aggregates daily data into weekly intervals.
-        """
+    #
+    # B) A single in-memory aggregator that handles ALL symbols together.
+    # We'll skip the old loop-based aggregator (see the "deprecated" method below).
+    #
+    def _aggregate_weekly_data_in_memory(
+        self, all_daily_data: pd.DataFrame
+    ) -> pd.DataFrame:
         try:
+            # all_daily_data is a DF containing columns:
+            #   [stock_id, date, open, high, low, close, volume, ...]
+            # We'll convert date to datetime index, groupby stock_id, resample weekly
+            df = all_daily_data.copy()
+            df["date"] = pd.to_datetime(df["date"])
+            df.set_index("date", inplace=True)
+
+            # Group by stock_id, then resample to weekly. "W-MON" means weekly on Monday.
             weekly_df = (
-                df.resample("W-MON")
+                df.groupby("stock_id")
+                .resample("W-MON")
                 .agg(
                     {
                         "open": "first",
@@ -257,42 +251,37 @@ class DataService:
                 )
                 .dropna()
             )
-            weekly_df = weekly_df.reset_index().rename(
-                columns={"date": "week_start_date"}
-            )
+            # This resample creates a MultiIndex: (stock_id, date)
+            weekly_df.reset_index(inplace=True)
+            weekly_df.rename(columns={"date": "week_start_date"}, inplace=True)
             return weekly_df
         except Exception as e:
-            logger.error(f"Error aggregating weekly data: {str(e)}")
+            logger.error(f"Error aggregating weekly data in memory: {str(e)}")
             logger.error(traceback.format_exc())
             raise
 
-    # ----------------------------------------------------------------------
-    # Methods that orchestrate the entire fetch/insert/update flow
-    # ----------------------------------------------------------------------
-
+    #
+    # MAIN ENTRY: Update daily data for all symbols, then do the weekly aggregator in memory.
+    #
     def update_all_stocks(
         self, symbols: Union[str, List[str]], start_date: str, end_date: str
     ):
-        """
-        Fetches data from yfinance, processes daily data, upserts into DB,
-        and then handles weekly aggregation.
-        """
         if isinstance(symbols, str):
             symbols = [symbols]
 
-        # Fetch data in one go
+        # 1) Fetch data from Yahoo for all symbols at once:
         all_data = StockDataFetcher.fetch_stock_data(symbols, start_date, end_date)
         if all_data.empty:
             logger.warning("No data retrieved from yfinance.")
             return
 
+        # 2) Upsert daily data in a single pass, then mark last_updated
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
-            all_daily_data = []
-            stock_ids = []
+            all_daily_records = []
 
-            for i, symbol in enumerate(symbols):
-                # For multiple symbols, yfinance returns a multi-index DataFrame
+            for symbol in symbols:
+                # If multiple symbols, the downloaded DataFrame has a nested structure: data[symbol]
                 if len(symbols) > 1:
                     symbol_data = all_data[symbol]
                 else:
@@ -302,38 +291,78 @@ class DataService:
                     logger.warning(f"Empty data for {symbol}. Skipping.")
                     continue
 
-                # Create stock if not exists
+                # Ensure we have a Stock record
                 stock = repository.get_stock_by_symbol(symbol)
                 if not stock:
                     stock = Stock(symbol=symbol, name=symbol)
                     repository.add_stock(stock)
 
-                # Prepare daily records
+                # Convert that DataFrame portion to a list of dicts for DB upsert
                 daily_data_records = self._process_symbol_data(
                     symbol, symbol_data, stock.id
                 )
-                all_daily_data.extend(daily_data_records)
-                stock_ids.append(stock.id)
+                all_daily_records.extend(daily_data_records)
 
-            # Bulk upsert all daily data
-            repository.bulk_upsert_daily_data(all_daily_data)
-
-            # Update last_updated for all relevant stocks
-            session.query(Stock).filter(Stock.id.in_(stock_ids)).update(
+            # Bulk upsert daily data
+            repository.bulk_upsert_daily_data(all_daily_records)
+            # Mark last_updated on these stocks
+            updated_ids = {rec["stock_id"] for rec in all_daily_records}
+            session.query(Stock).filter(Stock.id.in_(updated_ids)).update(
                 {Stock.last_updated: datetime.now().date()},
                 synchronize_session=False,
             )
 
-            # Aggregate daily -> weekly
-            self.aggregate_and_update_weekly_data(symbols, start_date, end_date)
+        # 3) Now do a single in-memory aggregation of weekly data for all symbols.
+        #    We'll reuse the same 'all_daily_records' to build a DF for weekly aggregator.
+        if not all_daily_records:
+            logger.warning("No daily data was upserted, skipping weekly aggregation.")
+            return
 
+        daily_df = pd.DataFrame(all_daily_records)
+
+        # Only include the date range asked for (plus maybe a small buffer),
+        # in case the downloaded data had extra.
+        daily_df = daily_df[
+            (pd.to_datetime(daily_df["date"]) >= pd.to_datetime(start_date))
+            & (pd.to_datetime(daily_df["date"]) <= pd.to_datetime(end_date))
+        ]
+
+        weekly_df = self._aggregate_weekly_data_in_memory(daily_df)
+        if weekly_df.empty:
+            logger.warning("No weekly data generated, skipping upsert.")
+            return
+
+        # Convert to list-of-dicts for the weekly_data table
+        weekly_records = []
+        for _, row in weekly_df.iterrows():
+            weekly_records.append(
+                {
+                    "stock_id": int(row["stock_id"]),
+                    "week_start_date": row["week_start_date"].date(),
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
+                    "close": float(row["close"]),
+                    "volume": int(row["volume"]),
+                }
+            )
+
+        # 4) Bulk upsert weekly data
+        with self.db_manager.session_scope() as session:
+            repository = StockRepository(session)
+            repository.bulk_upsert_weekly_data(weekly_records)
+
+    #
+    # The OLD aggregator method is kept here but not called. Use at your own risk.
+    # This does a DB query for each symbol's daily data. We replaced it with
+    # the single in-memory aggregator above.
+    #
     def aggregate_and_update_weekly_data(
         self, symbols: Union[str, List[str]], start_date: str, end_date: str
     ):
-        """
-        Aggregates daily data into weekly data and updates the weekly_data table.
-        Processes only the specified symbols and date range (adjusted 2 weeks earlier).
-        """
+        logger.warning(
+            "DEPRECATED: aggregate_and_update_weekly_data() is replaced by in-memory weekly aggregation."
+        )
         if isinstance(symbols, str):
             symbols = [symbols]
 
@@ -349,7 +378,6 @@ class DataService:
                     logger.warning(f"Stock {symbol} not found in database. Skipping.")
                     continue
 
-                # Fetch daily data from DB
                 daily_data = (
                     session.query(DailyData)
                     .filter(
@@ -360,7 +388,6 @@ class DataService:
                     .order_by(DailyData.date)
                     .all()
                 )
-
                 if not daily_data:
                     logger.warning(
                         f"No daily data for {symbol} in the date range. Skipping."
@@ -374,10 +401,24 @@ class DataService:
                 df["date"] = pd.to_datetime(df["date"])
                 df.set_index("date", inplace=True)
 
-                # Aggregate to weekly
-                weekly_df = self._aggregate_weekly_data(df)
+                # Aggregation
+                weekly_df = (
+                    df.resample("W-MON")
+                    .agg(
+                        {
+                            "open": "first",
+                            "high": "max",
+                            "low": "min",
+                            "close": "last",
+                            "volume": "sum",
+                        }
+                    )
+                    .dropna()
+                )
+                weekly_df = weekly_df.reset_index().rename(
+                    columns={"date": "week_start_date"}
+                )
 
-                # Prepare records for bulk upsert
                 weekly_records = []
                 for _, row in weekly_df.iterrows():
                     weekly_records.append(
@@ -391,10 +432,13 @@ class DataService:
                             "volume": row["volume"],
                         }
                     )
-
                 repository.bulk_upsert_weekly_data(weekly_records)
                 logger.info(f"Weekly data updated for {symbol}.")
 
+    #
+    # Indicator updates remain the same. You could optimize further by combining queries,
+    # but this is unchanged for now.
+    #
     def update_indicators(
         self,
         symbols: Union[str, List[str]],
@@ -402,10 +446,6 @@ class DataService:
         end_date: str,
         time_frame: str = "daily",
     ):
-        """
-        Recalculates and updates technical indicators for the given symbols and date range.
-        Supports both daily and weekly time frames.
-        """
         if isinstance(symbols, str):
             symbols = [symbols]
 
@@ -458,31 +498,31 @@ class DataService:
                 df[date_field] = pd.to_datetime(df[date_field])
                 df.set_index(date_field, inplace=True)
 
-                # Calculate indicators
                 indicators = self.indicator_calc.calculate_indicators(
                     df["close"], time_frame=time_frame
                 )
 
-                # Delete existing indicators for this time frame
+                # Remove old indicators in the same date range
                 repository.session.query(indicator_model).filter(
                     indicator_model.stock_id == stock.id,
                     indicator_model.date >= start_date_with_buffer,
+                    indicator_model.date <= end_date,
                 ).delete(synchronize_session=False)
                 repository.session.commit()
 
-                # Insert new indicator records
-                indicator_records = [
-                    {
-                        "stock_id": stock.id,
-                        "date": date_idx.date(),
-                        "indicator_name": name,
-                        "value": float(value),
-                    }
-                    for date_idx, row in indicators.iterrows()
-                    for name, value in row.items()
-                    if pd.notna(value)
-                ]
-
+                # Insert new rows
+                indicator_records = []
+                for date_idx, row in indicators.iterrows():
+                    for name, value in row.items():
+                        if pd.notna(value):
+                            indicator_records.append(
+                                {
+                                    "stock_id": stock.id,
+                                    "date": date_idx.date(),
+                                    "indicator_name": name,
+                                    "value": float(value),
+                                }
+                            )
                 if indicator_records:
                     repository.session.bulk_insert_mappings(
                         indicator_model, indicator_records
@@ -492,6 +532,9 @@ class DataService:
                 stock.last_updated = datetime.now().date()
                 repository.session.commit()
 
+    #
+    # Reading data with indicators is unchanged.
+    #
     def get_stock_data_with_indicators(
         self,
         symbols: Union[str, List[str]],
@@ -499,17 +542,11 @@ class DataService:
         end_date: str,
         time_frame: str = "daily",
     ) -> pd.DataFrame:
-        """
-        Fetches daily or weekly price data plus technical indicators
-        for the specified symbols and date range, returning a merged DataFrame.
-        """
         if isinstance(symbols, str):
             symbols = [symbols]
 
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
-
-            # Fetch all stocks matching the symbols
             stocks = session.query(Stock).filter(Stock.symbol.in_(symbols)).all()
             if not stocks:
                 logger.warning("No stocks found for the given symbols.")
@@ -548,12 +585,10 @@ class DataService:
                 logger.warning("No data found for the given date range.")
                 return pd.DataFrame()
 
-            # Map stock IDs to symbols
             data_df["symbol"] = data_df["stock_id"].map(stock_id_to_symbol)
             data_df.drop(columns=["id", "stock_id"], inplace=True)
             data_df[date_field] = pd.to_datetime(data_df[date_field])
 
-            # Fetch technical indicators in bulk
             indicators_query = (
                 session.query(indicator_model)
                 .filter(
@@ -566,7 +601,6 @@ class DataService:
             indicators_df = pd.read_sql(indicators_query.statement, session.bind)
             if indicators_df.empty:
                 logger.warning("No technical indicators found for the given range.")
-                # Return data without indicators
                 data_pivot = data_df.pivot_table(
                     index=[date_field, "symbol"],
                     values=["open", "high", "low", "close", "volume"],
@@ -574,27 +608,22 @@ class DataService:
                 final_df = data_pivot.reset_index()
                 return final_df
 
-            # Map stock IDs to symbols in the indicators
             indicators_df["symbol"] = indicators_df["stock_id"].map(stock_id_to_symbol)
             indicators_df.drop(columns=["id", "stock_id"], inplace=True)
             indicators_df[date_field] = pd.to_datetime(indicators_df[date_field])
 
-            # Pivot the indicators DataFrame
             indicators_pivot = indicators_df.pivot_table(
                 index=[date_field, "symbol"],
                 columns="indicator_name",
                 values="value",
             ).reset_index()
 
-            # Merge price data with indicators
             merged_df = pd.merge(
                 data_df,
                 indicators_pivot,
                 on=[date_field, "symbol"],
                 how="left",
             )
-
-            # Sort for readability
             merged_df.sort_values(by=["symbol", date_field], inplace=True)
             merged_df.reset_index(drop=True, inplace=True)
 
