@@ -1,13 +1,6 @@
 from src.data.fetcher import DataService
 from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
-from src.analysis.screeners import (
-    RSIOversoldScreener,
-    MACDBullishCrossScreener,
-    BollingerBreakoutScreener,
-    GoldenCrossScreener,
-    MACDHistogramExpansionScreener,
-    CompositeScreener,
-)
+from src.analysis.screeners import CompositeScreener, screener_registry
 import argparse
 import logging
 
@@ -84,20 +77,22 @@ def run_screener(selected_screeners: list, mode: str = "AND"):
         TSX_SYMBOLS, START_DATE, END_DATE
     )
 
-    screener_mapping = {
-        "rsi_oversold": RSIOversoldScreener(threshold=30),
-        "macd_bullish": MACDBullishCrossScreener(),
-        "bollinger_breakout": BollingerBreakoutScreener(),
-        "golden_cross": GoldenCrossScreener(),
-        "macd_histogram_expansion": MACDHistogramExpansionScreener(),
-    }
-    if "all" in selected_screeners:
-        active_screeners = list(screener_mapping.values())
+    active_screeners = []
+    if selected_screeners[0].lower() == "all":
+        active_screeners = list(screener_registry.keys())
     else:
-        active_screeners = [screener_mapping[name] for name in selected_screeners]
+        for name in selected_screeners:
+            screener_class = screener_registry.get(name.lower())
+            if screener_class:
+                active_screeners.append(screener_class())
+            else:
+                logger.warning(f"Screener '{name}' not found.")
 
-    combined_screener = CompositeScreener(active_screeners, mode=mode)
+    if not active_screeners:
+        logger.error("No valid screeners were found. Exiting...")
+        return
 
+    combined_screener = CompositeScreener(active_screeners, mode=mode.upper())
     screened_data = data[combined_screener.apply(data)]
     print(screened_data)
 
@@ -142,6 +137,8 @@ if __name__ == "__main__":
     if args.preview:
         preview(args.preview)
     if not (args.update or args.recalculate or args.screener or args.preview):
+
         print(
             "No action specified. Use --update, --recalculate, preview, or --screener."
         )
+        # run_screener(["all"], mode="OR")

@@ -1,44 +1,8 @@
 # Project To-Do Overview
 
-## 1. **Project Restructure**
-1. **DONE: Remove Dash/Plotly & Unused Files**  
-   - Eliminate the entire dashboard and callback logic.  
-   - Delete or comment out any modules purely supporting Dash (callbacks, layout components, etc.).  
-   - Prune files that are no longer necessary (e.g., YAML screener configs, leftover assets).
-
-2. **DONE: Simplify Folder Structure**  
-   - Consider collapsing the `visualization` directory if you plan to generate only simple HTML/plots without an interactive framework.  
-   - Combine or rename modules as needed (for instance, unify data fetch and indicator logic into fewer classes).
-
-3. **DONE: Improve Code Traceability**  
-   - Review each class (`DataService`, `DatabaseManager`, etc.) to confirm it’s really needed.  
-   - Keep common functionality (like “screeners” or “indicator calculations”) in a single, clear module.  
-   - Avoid partial duplication of logic.
-
----
-
-## 2. **Screening with Python-Only Definitions**
-1. **DONE: Remove YAML Config Approach**  
-   - Delete the YAML screener definitions (`.yaml`) and their loader code.  
-   - Convert screener logic directly into Python classes or functions.
-
-2. **DONE: Define a Pythonic Screener Interface**  
-   - For example:
-     ```python
-     def rsi_oversold_rebound(data, rsi_threshold=30):
-         # returns True/False for each row
-     ```
-   - Encapsulate “AND/OR” condition logic within the function or via function chaining.
-
-3. **DONE: Keep It Modular**  
-   - Example:
-     ```python
-     def run_screeners(data, screeners=[rsi_oversold_rebound, macd_bullish_cross]):
-         # Apply each screener to `data`
-         # Return a summary or DataFrame with results
-     ```
-   - Verify efficiency for a few thousand symbols in DataFrames.
-
+## 2. **Develop screeners in python**
+1. **Improve compositescreener so add flexibility (and/or nested combinations)**
+   - Need to abstract the import out of main.py so I don't have to keep adjusting it. Own file?
 ---
 
 ## 3. **Generate a Simple Report (HTML/Static Plots)**
