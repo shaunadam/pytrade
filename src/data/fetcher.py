@@ -65,7 +65,7 @@ class StockRepository:
     #    ON CONFLICT DO UPDATE. Make sure you have a unique constraint on (stock_id, date).
     #
     def bulk_upsert_daily_data(
-        self, daily_data_records: List[Dict], batch_size: int = 5000
+        self, daily_data_records: List[Dict], batch_size: int = 500
     ):
         if not daily_data_records:
             return
@@ -84,6 +84,7 @@ class StockRepository:
                     set_=update_dict,
                 )
                 self.session.execute(upsert_stmt)
+                logger.info(f"Upserted {len(batch)} daily data records.")
 
             logger.info(
                 f"Successfully upserted {len(daily_data_records)} daily data records."
@@ -98,7 +99,7 @@ class StockRepository:
     # 2) Weekly data upsert is already using chunked approach. We keep this.
     #
     def bulk_upsert_weekly_data(
-        self, weekly_data_records: List[Dict], batch_size: int = 5000
+        self, weekly_data_records: List[Dict], batch_size: int = 500
     ):
         if not weekly_data_records:
             return
@@ -112,6 +113,7 @@ class StockRepository:
                     index_elements=["stock_id", "week_start_date"], set_=update_dict
                 )
                 self.session.execute(upsert_stmt)
+                logger.info(f"Upserted {len(batch)} weekly data records.")
 
             logger.info(
                 f"Successfully upserted {len(weekly_data_records)} weekly data records."
@@ -351,89 +353,6 @@ class DataService:
         with self.db_manager.session_scope() as session:
             repository = StockRepository(session)
             repository.bulk_upsert_weekly_data(weekly_records)
-
-    #
-    # The OLD aggregator method is kept here but not called. Use at your own risk.
-    # This does a DB query for each symbol's daily data. We replaced it with
-    # the single in-memory aggregator above.
-    #
-    def aggregate_and_update_weekly_data(
-        self, symbols: Union[str, List[str]], start_date: str, end_date: str
-    ):
-        logger.warning(
-            "DEPRECATED: aggregate_and_update_weekly_data() is replaced by in-memory weekly aggregation."
-        )
-        if isinstance(symbols, str):
-            symbols = [symbols]
-
-        adjusted_start_date = (
-            pd.to_datetime(start_date) - timedelta(days=14)
-        ).strftime("%Y-%m-%d")
-
-        with self.db_manager.session_scope() as session:
-            repository = StockRepository(session)
-            for symbol in symbols:
-                stock = repository.get_stock_by_symbol(symbol)
-                if not stock:
-                    logger.warning(f"Stock {symbol} not found in database. Skipping.")
-                    continue
-
-                daily_data = (
-                    session.query(DailyData)
-                    .filter(
-                        DailyData.stock_id == stock.id,
-                        DailyData.date >= adjusted_start_date,
-                        DailyData.date <= end_date,
-                    )
-                    .order_by(DailyData.date)
-                    .all()
-                )
-                if not daily_data:
-                    logger.warning(
-                        f"No daily data for {symbol} in the date range. Skipping."
-                    )
-                    continue
-
-                df = pd.DataFrame([d.__dict__ for d in daily_data])
-                df = df.drop(
-                    columns=["id", "stock_id", "_sa_instance_state"], errors="ignore"
-                )
-                df["date"] = pd.to_datetime(df["date"])
-                df.set_index("date", inplace=True)
-
-                # Aggregation
-                weekly_df = (
-                    df.resample("W-MON")
-                    .agg(
-                        {
-                            "open": "first",
-                            "high": "max",
-                            "low": "min",
-                            "close": "last",
-                            "volume": "sum",
-                        }
-                    )
-                    .dropna()
-                )
-                weekly_df = weekly_df.reset_index().rename(
-                    columns={"date": "week_start_date"}
-                )
-
-                weekly_records = []
-                for _, row in weekly_df.iterrows():
-                    weekly_records.append(
-                        {
-                            "stock_id": stock.id,
-                            "week_start_date": row["week_start_date"].date(),
-                            "open": row["open"],
-                            "high": row["high"],
-                            "low": row["low"],
-                            "close": row["close"],
-                            "volume": row["volume"],
-                        }
-                    )
-                repository.bulk_upsert_weekly_data(weekly_records)
-                logger.info(f"Weekly data updated for {symbol}.")
 
     #
     # Indicator updates remain the same. You could optimize further by combining queries,

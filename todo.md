@@ -33,3 +33,4 @@
 ---
 
 ## 3. **(Future) Containerization / Docker Compose**
+should I use a python ta library instead of calculating my own indicators? maybe it's fine this way?
