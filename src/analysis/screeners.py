@@ -1,5 +1,5 @@
-from abc import ABC, abstractmethod
 import pandas as pd
+from abc import ABC, abstractmethod
 
 screener_registry = {}
 
@@ -49,25 +49,23 @@ class GoldenCrossScreener(BaseScreener):
         )
 
 
-# Composite Screener
 class CompositeScreener(BaseScreener):
-    def __init__(self, screener_names, mode="AND"):
+    def __init__(self, screeners, mode="AND"):
+        """
+        :param screeners: A list of *screener instances*, e.g. [RSIOversoldScreener(), MACDBullishCrossScreener()].
+        :param mode: "AND" or "OR" to combine the screener results.
+        """
         self.mode = mode.upper()
-        self.screeners = self._initialize_screeners(screener_names)
-
-    def _initialize_screeners(self, screener_names):
-        screeners = []
-        for name in screener_names:
-            screener_class = screener_registry.get(name.lower())
-            if screener_class:
-                screeners.append(screener_class())
-            else:
-                print(f"Warning: Screener '{name}' not found in the registry.")
-        return screeners
+        self.screeners = screeners  # We already have *objects*, not strings.
 
     def apply(self, data: pd.DataFrame) -> pd.Series:
+        if not self.screeners:
+            # If no screeners, return a Series of all False
+            return pd.Series([False] * len(data), index=data.index)
+
         results = [screener.apply(data) for screener in self.screeners]
         combined_result = pd.concat(results, axis=1)
+
         if self.mode == "AND":
             return combined_result.all(axis=1)
         elif self.mode == "OR":

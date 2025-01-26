@@ -1,6 +1,7 @@
 from src.data.fetcher import DataService
 from config import TSX_SYMBOLS, START_DATE, END_DATE, DATABASE_URL
 from src.analysis.screeners import CompositeScreener, screener_registry
+from src.analysis.report import generate_html_report
 import argparse
 import logging
 
@@ -72,15 +73,27 @@ def preview(symbol: str = "SU.TO"):
 
 
 def run_screener(selected_screeners: list, mode: str = "AND"):
+    """
+    Applies one or more screeners to the stock data and generates an HTML report.
+
+    :param selected_screeners: List of screener names, or ["all"] to use all registered screeners.
+    :param mode: "AND" or "OR" logic to combine multiple screeners if needed.
+    """
     data_service = DataService(DATABASE_URL)
+    # Fetch full DataFrame (with indicators) for your TSX symbols:
     data = data_service.get_stock_data_with_indicators(
         TSX_SYMBOLS, START_DATE, END_DATE
     )
+    if data.empty:
+        logger.warning("No data returned from the database. Exiting.")
+        return
 
-    active_screeners = []
-    if selected_screeners[0].lower() == "all":
-        active_screeners = list(screener_registry.keys())
+    # Determine which screeners to run:
+    if len(selected_screeners) == 1 and selected_screeners[0].lower() == "all":
+        # Use every screener in the registry
+        active_screeners = [cls() for cls in screener_registry.values()]
     else:
+        active_screeners = []
         for name in selected_screeners:
             screener_class = screener_registry.get(name.lower())
             if screener_class:
@@ -88,13 +101,56 @@ def run_screener(selected_screeners: list, mode: str = "AND"):
             else:
                 logger.warning(f"Screener '{name}' not found.")
 
+    # If no valid screeners, bail out:
     if not active_screeners:
-        logger.error("No valid screeners were found. Exiting...")
+        logger.error("No valid screeners found. Exiting.")
         return
 
+    # Combine them with CompositeScreener if you want an overall mask,
+    # but also keep individual screener results for the report.
     combined_screener = CompositeScreener(active_screeners, mode=mode.upper())
-    screened_data = data[combined_screener.apply(data)]
-    print(screened_data)
+    combined_mask = combined_screener.apply(data)
+    logger.info(f"Combined screener mask shape: {combined_mask.shape}")
+
+    # Prepare a dictionary: screener_name -> list of stock dictionaries
+    screener_results = {}
+    for screener in active_screeners:
+        screener_name = screener.__class__.__name__  # e.g. "RSIOversoldScreener"
+        mask = screener.apply(data)  # boolean series for this screener only
+        df_screened = data[mask]
+
+        stock_list = []
+        if not df_screened.empty:
+            # Group by symbol to gather timeseries + latest stats
+            for symbol, df_symbol in df_screened.groupby("symbol"):
+                if df_symbol.empty:
+                    continue
+                last_row = df_symbol.iloc[-1]
+
+                stock_list.append(
+                    {
+                        "symbol": symbol,
+                        "latest_price": last_row.get("close", None),
+                        "rsi": last_row.get("RSI", None),
+                        "macd": last_row.get("MACD", None),
+                        "sma50": last_row.get("SMA50", None),
+                        "sma200": last_row.get("SMA200", None),
+                        # Entire time-series for plotting
+                        "data": df_symbol[
+                            ["date", "open", "high", "low", "close", "volume"]
+                        ]
+                        .sort_values("date")
+                        .reset_index(drop=True),
+                    }
+                )
+
+        screener_results[screener_name] = stock_list
+
+    # Generate an HTML report that displays each screener's results + a plot
+    generate_html_report(screener_results)
+
+
+run_screener(["all"], mode="OR")
 
 
 if __name__ == "__main__":
@@ -141,4 +197,3 @@ if __name__ == "__main__":
         print(
             "No action specified. Use --update, --recalculate, preview, or --screener."
         )
-        # run_screener(["all"], mode="OR")

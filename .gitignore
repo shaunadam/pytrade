@@ -67,3 +67,5 @@ test.py
 repomix*
 docker-compose.yml
 migration*.py
+
+reports/*

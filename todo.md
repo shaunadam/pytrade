@@ -1,3 +1,5 @@
+reports not working. results dataframe needs to have multiindex I think.
+
 # Project To-Do Overview
 
 ## 1. **Generate a Simple Report (HTML/Static Plots)**
